@@ -1,10 +1,9 @@
 [package]
 
-name = "xz"
+name = "xz-sys"
 version = "0.0.1"
 authors = ["Hyeon Kim <simnalamburt@gmail.com>"]
-readme = "README.md"
-keywords = ["xz", "encoding"]
+build = "build.rs"
 license = "BSD-2-Clause"
 homepage = "https://github.com/simnalamburt/xz-rs"
 repository = "https://github.com/simnalamburt/xz-rs"
@@ -13,5 +12,6 @@ description = """
 A streaming compression/decompression library for rust with bindings to XZ Utils.
 """
 
-[dependencies.xz-sys]
-path = "xz-sys"
+[lib]
+name = "xz-sys"
+path = "lib.rs"
