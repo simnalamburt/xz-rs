@@ -10,7 +10,7 @@ homepage = "https://github.com/simnalamburt/xz-rs"
 repository = "https://github.com/simnalamburt/xz-rs"
 documentation = "http://simnalamburt.github.io/xz-rs"
 description = """
-A streaming compression/decompression library for rust with bindings to XZ Utils.
+A streaming compression/decompression library for rust with bindings to liblzma.
 """
 
 [dependencies.xz-sys]

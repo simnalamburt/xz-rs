@@ -1,8 +1,8 @@
 xz-rs [![version-i][]][crates] [![buildstat-i][]][travis]
 ========
 
-A streaming compression/decompression library for rust with bindings to XZ
-Utils. [Documentation][docs]
+A streaming compression/decompression library for rust with bindings to liblzma.
+[Documentation][docs]
 
 ```toml
 [dependencies]
