@@ -1,5 +1,16 @@
 extern crate libc;
 
+//
+// lzma/version.h
+//
+extern {
+    pub fn lzma_version_number() -> libc::uint32_t;
+    pub fn lzma_version_string() -> *const libc::c_char;
+}
+
+//
+// lzma/base.h
+//
 pub use lzma_reserved_enum::*;
 pub use lzma_ret::*;
 pub use lzma_action::*;
