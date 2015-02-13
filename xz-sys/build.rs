@@ -1,3 +1,8 @@
+extern crate "pkg-config" as pkg_config;
+
 fn main() {
-    println!("Good morning?");
+    match pkg_config::find_library("liblzma") {
+        Ok(_) => return,
+        Err(..) => unimplemented!()
+    }
 }

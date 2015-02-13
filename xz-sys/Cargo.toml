@@ -15,3 +15,6 @@ A streaming compression/decompression library for rust with bindings to liblzma.
 [lib]
 name = "xz-sys"
 path = "lib.rs"
+
+[build-dependencies]
+pkg-config = "*"
