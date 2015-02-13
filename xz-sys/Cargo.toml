@@ -12,9 +12,8 @@ description = """
 A streaming compression/decompression library for rust with bindings to liblzma.
 """
 
-[lib]
-name = "xz-sys"
-path = "lib.rs"
+[dependencies]
+libc = "*"
 
 [build-dependencies]
 pkg-config = "*"
