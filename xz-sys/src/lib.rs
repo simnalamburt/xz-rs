@@ -11,10 +11,6 @@ extern {
 //
 // lzma/base.h
 //
-pub use lzma_reserved_enum::*;
-pub use lzma_ret::*;
-pub use lzma_action::*;
-
 #[repr(C)]
 pub type lzma_boot = libc::c_uchar;
 
@@ -22,6 +18,7 @@ pub type lzma_boot = libc::c_uchar;
 pub type lzma_reserved_enum = libc::c_int;
 pub const LZMA_RESERVED_ENUM: lzma_reserved_enum = 0;
 
+pub use lzma_ret::*;
 #[repr(C)]
 #[derive(Copy)]
 pub enum lzma_ret {
@@ -39,6 +36,7 @@ pub enum lzma_ret {
     LZMA_PROG_ERROR         = 11,
 }
 
+pub use lzma_action::*;
 #[repr(C)]
 #[derive(Copy)]
 pub enum lzma_action {
@@ -51,9 +49,9 @@ pub enum lzma_action {
 
 #[repr(C)]
 pub struct lzma_allocator {
-    alloc: *mut extern fn(opaque: *mut libc::c_void, nmemb: libc::size_t, size: libc::size_t),
-    free: extern fn(opaque: *mut libc::c_void, ptr: *mut libc::c_void),
-    opaque: *mut libc::c_void
+    pub alloc: *mut extern fn(opaque: *mut libc::c_void, nmemb: libc::size_t, size: libc::size_t),
+    pub free: extern fn(opaque: *mut libc::c_void, ptr: *mut libc::c_void),
+    pub opaque: *mut libc::c_void
 }
 
 #[repr(C)]
@@ -61,28 +59,28 @@ pub struct lzma_internal;
 
 #[repr(C)]
 pub struct lzma_stream {
-    next_in: *const libc::uint8_t,
-    avail_in: libc::size_t,
-    total_in: libc::uint64_t,
+    pub next_in: *const libc::uint8_t,
+    pub avail_in: libc::size_t,
+    pub total_in: libc::uint64_t,
 
-    next_out: *mut libc::uint8_t,
-    avail_out: libc::size_t,
-    total_out: libc::uint64_t,
+    pub next_out: *mut libc::uint8_t,
+    pub avail_out: libc::size_t,
+    pub total_out: libc::uint64_t,
 
-    allocator: *const lzma_allocator,
+    pub allocator: *const lzma_allocator,
 
-    internal: *mut lzma_internal,
+    pub internal: *mut lzma_internal,
 
-    reserved_ptr1: *mut libc::c_void,
-    reserved_ptr2: *mut libc::c_void,
-    reserved_ptr3: *mut libc::c_void,
-    reserved_ptr4: *mut libc::c_void,
-    reserved_int1: *mut libc::uint64_t,
-    reserved_int2: *mut libc::uint64_t,
-    reserved_int3: *mut libc::size_t,
-    reserved_int4: *mut libc::size_t,
-    reserved_enum1: *mut lzma_reserved_enum,
-    reserved_enum2: *mut lzma_reserved_enum,
+    pub reserved_ptr1: *mut libc::c_void,
+    pub reserved_ptr2: *mut libc::c_void,
+    pub reserved_ptr3: *mut libc::c_void,
+    pub reserved_ptr4: *mut libc::c_void,
+    pub reserved_int1: *mut libc::uint64_t,
+    pub reserved_int2: *mut libc::uint64_t,
+    pub reserved_int3: *mut libc::size_t,
+    pub reserved_int4: *mut libc::size_t,
+    pub reserved_enum1: *mut lzma_reserved_enum,
+    pub reserved_enum2: *mut lzma_reserved_enum,
 }
 
 extern {
@@ -92,4 +90,21 @@ extern {
     pub fn lzma_memusage(stream: *const lzma_stream) -> libc::uint64_t;
     pub fn lzma_memlimit_get(stream: *const lzma_stream) -> libc::uint64_t;
     pub fn lzma_memlimit_set(stream: *mut lzma_stream, memlimit: libc::uint64_t) -> lzma_ret;
+}
+
+//
+// lzma/container.h
+//
+pub use lzma_check::*;
+#[repr(C)]
+#[derive(Copy)]
+pub enum lzma_check {
+    LZMA_CHECK_NONE     = 0,
+    LZMA_CHECK_CRC32    = 1,
+    LZMA_CHECK_CRC64    = 4,
+    LZMA_CHECK_SHA256   = 10
+}
+
+extern {
+    pub fn lzma_easy_encoder(stream: *mut lzma_stream, preset: libc::uint32_t, check: lzma_check) -> lzma_ret;
 }
