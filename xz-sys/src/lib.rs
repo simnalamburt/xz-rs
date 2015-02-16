@@ -107,4 +107,13 @@ pub enum lzma_check {
 
 extern {
     pub fn lzma_easy_encoder(stream: *mut lzma_stream, preset: libc::uint32_t, check: lzma_check) -> lzma_ret;
+    pub fn lzma_stream_decoder(stream: *mut lzma_stream, memlimit: libc::uint64_t, flags: libc::uint32_t) -> lzma_ret;
+    pub fn lzma_auto_decoder(stream: *mut lzma_stream, memlimit: libc::uint64_t, flags: libc::uint32_t) -> lzma_ret;
+}
+
+//
+// lzma/hardware.h
+//
+extern {
+    pub fn lzma_physmem() -> libc::uint64_t;
 }
