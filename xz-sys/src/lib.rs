@@ -1,21 +1,23 @@
 extern crate libc;
 
+use libc::*;
+
 //
 // lzma/version.h
 //
 extern {
-    pub fn lzma_version_number() -> libc::uint32_t;
-    pub fn lzma_version_string() -> *const libc::c_char;
+    pub fn lzma_version_number() -> uint32_t;
+    pub fn lzma_version_string() -> *const c_char;
 }
 
 //
 // lzma/base.h
 //
 #[repr(C)]
-pub type lzma_boot = libc::c_uchar;
+pub type lzma_boot = c_uchar;
 
 #[repr(C)]
-pub type lzma_reserved_enum = libc::c_int;
+pub type lzma_reserved_enum = c_int;
 pub const LZMA_RESERVED_ENUM: lzma_reserved_enum = 0;
 
 pub use lzma_ret::*;
@@ -49,9 +51,9 @@ pub enum lzma_action {
 
 #[repr(C)]
 pub struct lzma_allocator {
-    pub alloc: *mut extern fn(opaque: *mut libc::c_void, nmemb: libc::size_t, size: libc::size_t),
-    pub free: extern fn(opaque: *mut libc::c_void, ptr: *mut libc::c_void),
-    pub opaque: *mut libc::c_void
+    pub alloc: *mut extern fn(opaque: *mut c_void, nmemb: size_t, size: size_t),
+    pub free: extern fn(opaque: *mut c_void, ptr: *mut c_void),
+    pub opaque: *mut c_void
 }
 
 #[repr(C)]
@@ -59,26 +61,26 @@ pub struct lzma_internal;
 
 #[repr(C)]
 pub struct lzma_stream {
-    pub next_in: *const libc::uint8_t,
-    pub avail_in: libc::size_t,
-    pub total_in: libc::uint64_t,
+    pub next_in: *const uint8_t,
+    pub avail_in: size_t,
+    pub total_in: uint64_t,
 
-    pub next_out: *mut libc::uint8_t,
-    pub avail_out: libc::size_t,
-    pub total_out: libc::uint64_t,
+    pub next_out: *mut uint8_t,
+    pub avail_out: size_t,
+    pub total_out: uint64_t,
 
     pub allocator: *const lzma_allocator,
 
     pub internal: *mut lzma_internal,
 
-    pub reserved_ptr1: *mut libc::c_void,
-    pub reserved_ptr2: *mut libc::c_void,
-    pub reserved_ptr3: *mut libc::c_void,
-    pub reserved_ptr4: *mut libc::c_void,
-    pub reserved_int1: *mut libc::uint64_t,
-    pub reserved_int2: *mut libc::uint64_t,
-    pub reserved_int3: *mut libc::size_t,
-    pub reserved_int4: *mut libc::size_t,
+    pub reserved_ptr1: *mut c_void,
+    pub reserved_ptr2: *mut c_void,
+    pub reserved_ptr3: *mut c_void,
+    pub reserved_ptr4: *mut c_void,
+    pub reserved_int1: *mut uint64_t,
+    pub reserved_int2: *mut uint64_t,
+    pub reserved_int3: *mut size_t,
+    pub reserved_int4: *mut size_t,
     pub reserved_enum1: *mut lzma_reserved_enum,
     pub reserved_enum2: *mut lzma_reserved_enum,
 }
@@ -86,10 +88,10 @@ pub struct lzma_stream {
 extern {
     pub fn lzma_code(stream: *mut lzma_stream, action: lzma_action) -> lzma_ret;
     pub fn lzma_end(stream: *mut lzma_stream);
-    pub fn lzma_get_progress(stream: *mut lzma_stream, progress_in: *mut libc::uint64_t, progress_out: *mut libc::uint64_t);
-    pub fn lzma_memusage(stream: *const lzma_stream) -> libc::uint64_t;
-    pub fn lzma_memlimit_get(stream: *const lzma_stream) -> libc::uint64_t;
-    pub fn lzma_memlimit_set(stream: *mut lzma_stream, memlimit: libc::uint64_t) -> lzma_ret;
+    pub fn lzma_get_progress(stream: *mut lzma_stream, progress_in: *mut uint64_t, progress_out: *mut uint64_t);
+    pub fn lzma_memusage(stream: *const lzma_stream) -> uint64_t;
+    pub fn lzma_memlimit_get(stream: *const lzma_stream) -> uint64_t;
+    pub fn lzma_memlimit_set(stream: *mut lzma_stream, memlimit: uint64_t) -> lzma_ret;
 }
 
 //
@@ -106,14 +108,14 @@ pub enum lzma_check {
 }
 
 extern {
-    pub fn lzma_easy_encoder(stream: *mut lzma_stream, preset: libc::uint32_t, check: lzma_check) -> lzma_ret;
-    pub fn lzma_stream_decoder(stream: *mut lzma_stream, memlimit: libc::uint64_t, flags: libc::uint32_t) -> lzma_ret;
-    pub fn lzma_auto_decoder(stream: *mut lzma_stream, memlimit: libc::uint64_t, flags: libc::uint32_t) -> lzma_ret;
+    pub fn lzma_easy_encoder(stream: *mut lzma_stream, preset: uint32_t, check: lzma_check) -> lzma_ret;
+    pub fn lzma_stream_decoder(stream: *mut lzma_stream, memlimit: uint64_t, flags: uint32_t) -> lzma_ret;
+    pub fn lzma_auto_decoder(stream: *mut lzma_stream, memlimit: uint64_t, flags: uint32_t) -> lzma_ret;
 }
 
 //
 // lzma/hardware.h
 //
 extern {
-    pub fn lzma_physmem() -> libc::uint64_t;
+    pub fn lzma_physmem() -> uint64_t;
 }
