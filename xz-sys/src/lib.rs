@@ -95,7 +95,7 @@ extern {
 }
 
 //
-// lzma/container.h
+// lzma/check.h
 //
 pub use lzma_check::*;
 #[repr(C)]
@@ -106,6 +106,11 @@ pub enum lzma_check {
     LZMA_CHECK_CRC64    = 4,
     LZMA_CHECK_SHA256   = 10
 }
+
+//
+// lzma/container.h
+//
+pub const LZMA_CONCATENATED: uint32_t = 0x08;
 
 extern {
     pub fn lzma_easy_encoder(stream: *mut lzma_stream, preset: uint32_t, check: lzma_check) -> lzma_ret;
