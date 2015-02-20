@@ -16,11 +16,11 @@ fn main() {
         Err(_) => ()
     }
 
-    let out_dir = env::var("OUT_DIR").ok().unwrap();
-    let num_jobs = env::var("NUM_JOBS").ok().unwrap();
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let num_jobs = env::var("NUM_JOBS").unwrap();
 
     // cd xz
-    env::set_current_dir(&Path::new("xz")).ok().unwrap();
+    env::set_current_dir(&Path::new("xz")).unwrap();
 
     let ret = Command::new("./configure")
         .args(&[
