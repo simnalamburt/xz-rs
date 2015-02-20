@@ -9,6 +9,13 @@ A streaming compression/decompression library for rust with bindings to liblzma.
 xz = "*"
 ```
 
+### Prerequisites
+
+* [Rust][]
+* [xz][]<br>
+  *or*<br>
+  GNU Make
+
 --------
 
 [BSD 2-Clause](LICENSE.md)
