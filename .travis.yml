@@ -3,7 +3,7 @@ os:
   - linux
   - osx
 install:
-  - sudo apt-get install make
+  - sudo apt-get install make automake
 notifications:
   irc:
     nick: xz-rs
