@@ -13,7 +13,7 @@ xz = "*"
 
 * [rust][]
 * [xz][] *or*<br>
-  make, automake
+  make, automake, autotools-dev
 
 --------
 
