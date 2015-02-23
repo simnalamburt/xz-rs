@@ -3,7 +3,7 @@ os:
   - linux
   - osx
 install:
-  - sudo apt-get install make automake autotools-dev
+  - sudo apt-get install liblzma5
 notifications:
   irc:
     nick: xz-rs

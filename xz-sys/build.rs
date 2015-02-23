@@ -1,20 +1,19 @@
 #![feature(env, process)]
 #![feature(old_path)]
 
-extern crate "pkg-config" as pkg_config;
+extern crate "pkg-config" as pkg;
 
 use std::env;
 use std::process::Command;
+use pkg::find_library;
 
 fn main() {
     // Cross compile not supported yet. See #8
     if env::var("TARGET") != env::var("HOST") { unimplemented!() }
 
     // Use system installed liblzma if it exists, compile it manually otherwise.
-    match pkg_config::find_library("liblzma") {
-        Ok(_) => return,
-        Err(_) => ()
-    }
+    if find_library("liblzma").is_ok() { return }
+    if find_library("liblzma5").is_ok() { return }
 
     let out_dir = env::var("OUT_DIR").unwrap();
     let num_jobs = env::var("NUM_JOBS").unwrap();

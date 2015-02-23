@@ -12,7 +12,7 @@ xz = "*"
 ### Prerequisites
 
 * [rust][]
-* [xz][] *or*<br>
+* [liblzma][] *or*<br>
   make, automake, autotools-dev
 
 --------
@@ -27,4 +27,4 @@ xz = "*"
 
 [docs]: http://simnalamburt.github.io/xz-rs
 [rust]: http://rust-lang.org
-[xz]: http://tukaani.org/xz
+[liblzma]: http://tukaani.org/xz
