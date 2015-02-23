@@ -3,7 +3,7 @@
 extern crate "xz-sys" as xz_sys;
 
 use std::str;
-use std::ffi;
+use std::ffi::CStr;
 use std::mem;
 use xz_sys::*;
 
@@ -14,7 +14,7 @@ fn version() {
         println!("{:?}", version);
 
         let version = lzma_version_string();
-        let version = str::from_utf8(ffi::c_str_to_bytes(&version)).unwrap();
+        let version = str::from_utf8_unchecked(CStr::from_ptr(version).to_bytes());
         println!("{:?}", version);
     }
 }
