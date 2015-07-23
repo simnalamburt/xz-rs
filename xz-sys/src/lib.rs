@@ -27,7 +27,7 @@ pub const LZMA_RESERVED_ENUM: lzma_reserved_enum = 0;
 
 pub use lzma_ret::*;
 #[repr(C)]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub enum lzma_ret {
     LZMA_OK                 = 0,
     LZMA_STREAM_END         = 1,
@@ -45,7 +45,7 @@ pub enum lzma_ret {
 
 pub use lzma_action::*;
 #[repr(C)]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub enum lzma_action {
     LZMA_RUN = 0,
     LZMA_SYNC_FLUSH = 1,
@@ -125,7 +125,7 @@ extern {
 //
 pub use lzma_check::*;
 #[repr(C)]
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub enum lzma_check {
     LZMA_CHECK_NONE     = 0,
     LZMA_CHECK_CRC32    = 1,

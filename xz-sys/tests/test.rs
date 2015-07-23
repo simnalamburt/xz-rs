@@ -1,6 +1,4 @@
-#![feature(std_misc)]
-
-extern crate "xz-sys" as xz_sys;
+extern crate xz_sys;
 
 use std::str;
 use std::ffi::CStr;
@@ -28,7 +26,7 @@ fn easy_encoder() {
             e => panic!("Error on lzma_stream_encoder (result: {})", e as i32)
         }
 
-        let buffer_in = [b'H', b'e', b'l', b'l', b'o', b',', b' ', b'w', b'o', b'r', b'l', b'd'];
+        let buffer_in = b"Hello, world";
         stream.next_in = buffer_in.as_ptr();
         stream.avail_in = buffer_in.len() as u64;
 
