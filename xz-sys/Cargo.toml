@@ -13,7 +13,7 @@ A streaming compression/decompression library for rust with bindings to liblzma.
 """
 
 [dependencies]
-libc = "*"
+libc = "0.1"
 
 [build-dependencies]
-pkg-config = "*"
+pkg-config = "0.3"
