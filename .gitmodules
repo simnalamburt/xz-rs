@@ -1,3 +1,0 @@
-[submodule "xz-sys/xz"]
-	path = xz-sys/xz
-	url = https://github.com/simnalamburt/xz.git
