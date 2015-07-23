@@ -1,11 +1,9 @@
-#![feature(env, process)]
-#![feature(old_path)]
-
-extern crate "pkg-config" as pkg;
+extern crate pkg_config;
 
 use std::env;
+use std::path::Path;
 use std::process::Command;
-use pkg::find_library;
+use pkg_config::find_library;
 
 fn main() {
     // Cross compile not supported yet. See #8
@@ -19,7 +17,7 @@ fn main() {
     let num_jobs = env::var("NUM_JOBS").unwrap();
 
     // cd xz
-    env::set_current_dir(&Path::new("xz")).unwrap();
+    env::set_current_dir(Path::new("xz")).unwrap();
 
     let ret = Command::new("./configure")
         .args(&[
