@@ -13,17 +13,17 @@ xz = "*"
 
 * [rust][]
 * [liblzma][] *or*<br>
-  make, automake, autotools-dev
+  GNU Make and C compiler
 
 --------
 
 [BSD 2-Clause](LICENSE.md)
 
-[cargo-i]: https://img.shields.io/badge/cargo-v0.0.1-red.svg?style=flat
-[cargo-a]: https://crates.io/crates/obj-rs
+[cargo-i]: https://img.shields.io/crates/v/xz.svg
+[cargo-a]: https://crates.io/crates/xz
 
-[travis-i]: https://travis-ci.org/simnalamburt/obj-rs.svg?style=flat
-[travis-a]: https://travis-ci.org/simnalamburt/obj-rs
+[travis-i]: https://travis-ci.org/simnalamburt/xz-rs.svg?style=flat
+[travis-a]: https://travis-ci.org/simnalamburt/xz-rs
 
 [docs]: http://simnalamburt.github.io/xz-rs
 [rust]: http://rust-lang.org
