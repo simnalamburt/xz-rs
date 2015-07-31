@@ -1,8 +1,8 @@
-xz-rs [![cargo-i][]][cargo-a] [![travis-i][]][travis-a]
+xz-rs [![crates-i][]][crates-a] [![travis-i][]][travis-a]
 ========
 
-A streaming compression/decompression library for rust with bindings to liblzma.
-[Documentation][docs]
+A streaming compression/decompression library for [Rust][] with bindings to
+liblzma. [Documentation][doc]
 
 ```toml
 [dependencies]
@@ -11,20 +11,19 @@ xz = "*"
 
 ### Prerequisites
 
-* [rust][]
+* [Rust][]
 * [liblzma][] *or*<br>
-  GNU Make and C compiler
+  tar, make, c compiler
 
 --------
 
 [BSD 2-Clause](LICENSE.md)
 
-[cargo-i]: https://img.shields.io/crates/v/xz.svg
-[cargo-a]: https://crates.io/crates/xz
-
-[travis-i]: https://travis-ci.org/simnalamburt/xz-rs.svg?style=flat
+[crates-i]: https://img.shields.io/crates/v/xz.svg
+[crates-a]: https://crates.io/crates/xz
+[travis-i]: https://travis-ci.org/simnalamburt/xz-rs.svg?branch=master
 [travis-a]: https://travis-ci.org/simnalamburt/xz-rs
 
-[docs]: http://simnalamburt.github.io/xz-rs
-[rust]: http://rust-lang.org
+[Rust]: http://rust-lang.org
+[doc]: http://simnalamburt.github.io/xz-rs
 [liblzma]: http://tukaani.org/xz
