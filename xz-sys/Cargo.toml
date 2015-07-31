@@ -1,13 +1,13 @@
 [package]
-
 name = "xz-sys"
 version = "0.0.1"
 authors = ["Hyeon Kim <simnalamburt@gmail.com>"]
-build = "build.rs"
-license = "BSD-2-Clause"
 homepage = "https://github.com/simnalamburt/xz-rs"
 repository = "https://github.com/simnalamburt/xz-rs"
 documentation = "http://simnalamburt.github.io/xz-rs"
+license = "BSD-2-Clause"
+build = "build.rs"
+
 description = """
 A streaming compression/decompression library for rust with bindings to liblzma.
 """
