@@ -5,7 +5,7 @@ authors = ["Hyeon Kim <simnalamburt@gmail.com>", "Alex Crichton <alex@alexcricht
 homepage = "https://github.com/alexcrichton/xz2-rs"
 repository = "https://github.com/alexcrichton/xz2-rs"
 documentation = "https://docs.rs/xz-sys"
-license = "MIT/Apache-2.0"
+license = "Apache-2.0 OR MIT"
 
 description = """
 Raw bindings to liblzma which contains an implementation of LZMA and xz stream
