@@ -1,24 +1,5 @@
-[package]
-name = "xz"
-version = "0.1.0"
-authors = ["Hyeon Kim <simnalamburt@gmail.com>", "Alex Crichton <alex@alexcrichton.com>"]
-license = "Apache-2.0 OR MIT"
-readme = "README.md"
-keywords = ["lzma", "xz", "encoding"]
-repository = "https://github.com/alexcrichton/xz2-rs"
-homepage = "https://github.com/alexcrichton/xz2-rs"
-documentation = "https://docs.rs/xz"
-description = """
-Rust bindings to liblzma providing Read/Write streams as well as low-level
-in-memory encoding/decoding.
-
-Alias of `xz2` crate.
-"""
-categories = ["compression", "api-bindings"]
-edition = "2018"
-
-[dependencies]
-xz2 = "0.1"
-
-[features]
-tokio = ["xz2/tokio"]
+[workspace]
+members = [
+    "xz",
+    "xz-sys",
+]
