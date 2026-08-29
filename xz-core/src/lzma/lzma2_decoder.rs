@@ -67,7 +67,7 @@ unsafe fn lzma2_decode(
     while *in_pos < in_size || (*coder).sequence == SEQ_LZMA {
         match (*coder).sequence {
             0 => {
-                let control: u32 = *input.offset(*in_pos as isize) as u32;
+                let control: u32 = *input.add(*in_pos) as u32;
                 *in_pos = (*in_pos).wrapping_add(1);
                 if control == 0 {
                     return LZMA_STREAM_END;
@@ -113,13 +113,13 @@ unsafe fn lzma2_decode(
             1 => {
                 (*coder).uncompressed_size = (*coder)
                     .uncompressed_size
-                    .wrapping_add(((*input.offset(*in_pos as isize) as u32) << 8) as size_t);
+                    .wrapping_add(((*input.add(*in_pos) as u32) << 8) as size_t);
                 *in_pos += 1;
                 (*coder).sequence = SEQ_UNCOMPRESSED_2;
             }
             2 => {
                 (*coder).uncompressed_size = (*coder).uncompressed_size.wrapping_add(
-                    u32::from(*input.offset(*in_pos as isize)).wrapping_add(1) as size_t,
+                    u32::from(*input.add(*in_pos)).wrapping_add(1) as size_t,
                 );
                 *in_pos += 1;
                 (*coder).sequence = SEQ_COMPRESSED_0;
@@ -133,19 +133,19 @@ unsafe fn lzma2_decode(
             }
             3 => {
                 (*coder).compressed_size =
-                    ((*input.offset(*in_pos as isize) as u32) << 8) as size_t;
+                    ((*input.add(*in_pos) as u32) << 8) as size_t;
                 *in_pos += 1;
                 (*coder).sequence = SEQ_COMPRESSED_1;
             }
             4 => {
                 (*coder).compressed_size = (*coder).compressed_size.wrapping_add(
-                    u32::from(*input.offset(*in_pos as isize)).wrapping_add(1) as size_t,
+                    u32::from(*input.add(*in_pos)).wrapping_add(1) as size_t,
                 );
                 *in_pos += 1;
                 (*coder).sequence = (*coder).next_sequence as sequence;
             }
             5 => {
-                let prop_byte = *input.offset(*in_pos as isize);
+                let prop_byte = *input.add(*in_pos);
                 *in_pos += 1;
                 if lzma_lzma_lclppb_decode(::core::ptr::addr_of_mut!((*coder).options), prop_byte) {
                     return LZMA_DATA_ERROR;

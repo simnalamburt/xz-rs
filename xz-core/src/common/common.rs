@@ -62,8 +62,8 @@ pub unsafe fn lzma_bufcpy(
     };
     if copy_size > 0 {
         core::ptr::copy_nonoverlapping(
-            input.offset(*in_pos as isize) as *const u8,
-            out.offset(*out_pos as isize) as *mut u8,
+            input.add(*in_pos) as *const u8,
+            out.add(*out_pos) as *mut u8,
             copy_size,
         );
     }
@@ -240,12 +240,12 @@ pub unsafe fn lzma_code(strm: *mut lzma_stream, action: lzma_action) -> lzma_ret
         action,
     );
     if in_pos > 0 {
-        (*strm).next_in = (*strm).next_in.offset(in_pos as isize);
+        (*strm).next_in = (*strm).next_in.add(in_pos);
         (*strm).avail_in -= in_pos;
         (*strm).total_in = (*strm).total_in.wrapping_add(in_pos as u64);
     }
     if out_pos > 0 {
-        (*strm).next_out = (*strm).next_out.offset(out_pos as isize);
+        (*strm).next_out = (*strm).next_out.add(out_pos);
         (*strm).avail_out -= out_pos;
         (*strm).total_out = (*strm).total_out.wrapping_add(out_pos as u64);
     }

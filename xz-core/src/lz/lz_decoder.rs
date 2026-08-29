@@ -35,7 +35,7 @@ pub const LZMA_LZ_DECODER_INIT: lzma_lz_decoder = lzma_lz_decoder {
 unsafe fn lz_decoder_reset(coder: *mut lzma_coder) {
     (*coder).dict.pos = LZ_DICT_INIT_POS as size_t;
     (*coder).dict.full = 0;
-    *(*coder).dict.buf.offset((LZ_DICT_INIT_POS - 1) as isize) = '\0' as i32 as u8;
+    *(*coder).dict.buf.add((LZ_DICT_INIT_POS - 1) as size_t) = '\0' as i32 as u8;
     (*coder).dict.has_wrapped = false;
     (*coder).dict.need_reset = false;
 }
@@ -56,8 +56,8 @@ unsafe fn decode_buffer(
                 (*coder)
                     .dict
                     .buf
-                    .offset((*coder).dict.size as isize)
-                    .offset(-(LZ_DICT_REPEAT_MAX as isize)) as *const u8,
+                    .add((*coder).dict.size - LZ_DICT_REPEAT_MAX as size_t)
+                    as *const u8,
                 (*coder).dict.buf as *mut u8,
                 LZ_DICT_REPEAT_MAX as size_t,
             );
@@ -81,8 +81,8 @@ unsafe fn decode_buffer(
         let copy_size: size_t = (*coder).dict.pos.wrapping_sub(dict_start);
         if copy_size > 0 {
             core::ptr::copy_nonoverlapping(
-                (*coder).dict.buf.offset(dict_start as isize) as *const u8,
-                out.offset(*out_pos as isize) as *mut u8,
+                (*coder).dict.buf.add(dict_start) as *const u8,
+                out.add(*out_pos) as *mut u8,
                 copy_size,
             );
         }
@@ -253,10 +253,10 @@ pub unsafe fn lzma_lz_decoder_init(
         lz_options.dict_size = 4096;
     }
     if lz_options.dict_size
-        > (SIZE_MAX as size_t)
-            .wrapping_sub(15)
-            .wrapping_sub((2 * LZ_DICT_REPEAT_MAX) as size_t)
-            .wrapping_sub(LZ_DICT_EXTRA as size_t)
+        > (isize::MAX as size_t)
+            .saturating_sub(15)
+            .saturating_sub((2 * LZ_DICT_REPEAT_MAX) as size_t)
+            .saturating_sub(LZ_DICT_EXTRA as size_t)
     {
         return LZMA_MEM_ERROR;
     }
@@ -288,8 +288,8 @@ pub unsafe fn lzma_lz_decoder_init(
         };
         let offset: size_t = lz_options.preset_dict_size.wrapping_sub(copy_size);
         core::ptr::copy_nonoverlapping(
-            lz_options.preset_dict.offset(offset as isize) as *const u8,
-            (*coder).dict.buf.offset((*coder).dict.pos as isize) as *mut u8,
+            lz_options.preset_dict.add(offset) as *const u8,
+            (*coder).dict.buf.add((*coder).dict.pos) as *mut u8,
             copy_size,
         );
         (*coder).dict.pos = (*coder).dict.pos.wrapping_add(copy_size);
@@ -310,4 +310,58 @@ pub fn lzma_lz_decoder_memusage(dictionary_size: size_t) -> u64 {
         .wrapping_add(dictionary_size as u64)
         .wrapping_add((2 * LZ_DICT_REPEAT_MAX) as u64)
         .wrapping_add(LZ_DICT_EXTRA as u64)
+}
+
+#[cfg(all(test, target_pointer_width = "32"))]
+mod tests {
+    use super::*;
+    use crate::common::common::lzma_next_end;
+
+    unsafe fn huge_dict_lz_init(
+        lz: *mut lzma_lz_decoder,
+        _allocator: *const lzma_allocator,
+        _id: lzma_vli,
+        _opt: *const c_void,
+        lz_options: *mut lzma_lz_options,
+    ) -> lzma_ret {
+        unsafe fn noop_end(_coder: *mut c_void, _allocator: *const lzma_allocator) {}
+        (*lz).coder = core::ptr::without_provenance_mut(1);
+        (*lz).end = Some(noop_end);
+        (*lz_options).dict_size = 1 << 31;
+        (*lz_options).preset_dict = core::ptr::null();
+        (*lz_options).preset_dict_size = 0;
+        LZMA_OK
+    }
+
+    #[test]
+    fn lz_decoder_init_rejects_dict_larger_than_isize_max() {
+        let mut next = lzma_next_coder_s {
+            coder: core::ptr::null_mut(),
+            id: LZMA_VLI_UNKNOWN,
+            init: 0,
+            code: None,
+            end: None,
+            get_progress: None,
+            get_check: None,
+            memconfig: None,
+            update: None,
+            set_out_limit: None,
+        };
+        let filters = [lzma_filter_info {
+            id: 0,
+            init: None,
+            options: core::ptr::null_mut(),
+        }];
+
+        let ret = unsafe {
+            lzma_lz_decoder_init(
+                core::ptr::addr_of_mut!(next),
+                core::ptr::null(),
+                filters.as_ptr(),
+                huge_dict_lz_init,
+            )
+        };
+        unsafe { lzma_next_end(core::ptr::addr_of_mut!(next), core::ptr::null()) };
+        assert_eq!(ret, LZMA_MEM_ERROR);
+    }
 }
