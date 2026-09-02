@@ -25,7 +25,7 @@ xz-core = { path = "xz-core", version = "0.1.0-rc.0", optional = true }
 xz-sys = { path = "xz-sys", version = "0.4.6-rc.0", optional = true }
 liblzma-sys = { version = "0.4.6", optional = true, default-features = false }
 num_cpus = { version = "1.16.0", optional = true }
-criterion = { version = "0.5", features = ["html_reports"], optional = true }
+criterion = { version = "0.8", features = ["html_reports"], optional = true }
 
 [dev-dependencies]
 rand = "0.8.0"
