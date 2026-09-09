@@ -531,29 +531,49 @@ unsafe fn lzma_crc32_loongarch(buf: &[u8], crc_unsigned: u32) -> u32 {
     !(crc as u32)
 }
 
-pub unsafe fn lzma_crc32(buf: *const u8, size: size_t, crc: u32) -> u32 {
-    let buf = if size == 0 {
-        &[][..]
-    } else {
-        core::slice::from_raw_parts(buf, size)
-    };
+/// Slice-taking form. The length travels with the pointer, so it cannot
+/// disagree with the allocation the way a separate `size` argument can.
+pub fn crc32(buf: &[u8], crc: u32) -> u32 {
     #[cfg(target_arch = "aarch64")]
     {
         if std::arch::is_aarch64_feature_detected!("crc") {
-            return lzma_crc32_arm64(buf, crc);
+            // SAFETY: the CRC extension is what the detection above tests for,
+            // and the slice carries its own length.
+            return unsafe { lzma_crc32_arm64(buf, crc) };
         }
     }
 
+    // SAFETY: CRC32 instructions are part of the 64-bit LoongArch base ISA, so
+    // there is nothing to detect; the slice carries its own length.
     #[cfg(target_arch = "loongarch64")]
-    return lzma_crc32_loongarch(buf, crc);
+    return unsafe { lzma_crc32_loongarch(buf, crc) };
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if crate::check::crc_x86_clmul::is_arch_extension_supported() {
-            return crate::check::crc_x86_clmul::crc32_arch_optimized(buf.as_ptr(), buf.len(), crc);
+            // SAFETY: the CLMUL and SSSE3 extensions are what the detection
+            // above tests for, and the pointer and length come from one slice.
+            return unsafe {
+                crate::check::crc_x86_clmul::crc32_arch_optimized(buf.as_ptr(), buf.len(), crc)
+            };
         }
     }
 
     #[cfg(not(target_arch = "loongarch64"))]
     lzma_crc32_generic(buf, crc)
+}
+
+/// Pointer-and-length form, for the transpiled call sites that hold a C
+/// buffer-and-size pair. [`crc32`] is the form this crate offers outside it;
+/// the C ABI entry point lives in `xz-sys`.
+///
+/// # Safety
+/// `buf` must be readable for `size` bytes, or `size` must be zero.
+pub(crate) unsafe fn lzma_crc32(buf: *const u8, size: size_t, crc: u32) -> u32 {
+    let buf = if size == 0 {
+        &[][..]
+    } else {
+        core::slice::from_raw_parts(buf, size)
+    };
+    crc32(buf, crc)
 }

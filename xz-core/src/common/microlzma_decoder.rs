@@ -63,10 +63,7 @@ unsafe fn microlzma_decode(
             options.ext_size_low = (*coder).uncomp_size as u32;
             options.ext_size_high = ((*coder).uncomp_size >> 32) as u32;
         }
-        if lzma_lzma_lclppb_decode(
-            ::core::ptr::addr_of_mut!(options),
-            !*input.offset(*in_pos as isize),
-        ) {
+        if lzma_lzma_lclppb_decode(::core::ptr::addr_of_mut!(options), !*input.add(*in_pos)) {
             return LZMA_OPTIONS_ERROR;
         }
         *in_pos += 1;

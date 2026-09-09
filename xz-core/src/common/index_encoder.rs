@@ -34,19 +34,18 @@ unsafe fn index_encode(
     while *out_pos < out_size {
         match (*coder).sequence {
             0 => {
-                *out.offset(*out_pos as isize) = INDEX_INDICATOR;
+                *out.add(*out_pos) = INDEX_INDICATOR;
                 *out_pos += 1;
                 (*coder).sequence = SEQ_COUNT;
                 continue;
             }
             1 => {
-                let count: lzma_vli = lzma_index_block_count((*coder).index) as lzma_vli;
+                let count: lzma_vli = lzma_index_block_count(&*(*coder).index) as lzma_vli;
                 ret = lzma_vli_encode(
                     count,
-                    ::core::ptr::addr_of_mut!((*coder).pos),
-                    out,
-                    out_pos,
-                    out_size,
+                    Some(&mut (*coder).pos),
+                    c_slice_mut(out, out_size),
+                    &mut *out_pos,
                 );
                 if ret != LZMA_STREAM_END {
                     break;
@@ -57,12 +56,8 @@ unsafe fn index_encode(
                 continue;
             }
             4 => {
-                if lzma_index_iter_next(
-                    ::core::ptr::addr_of_mut!((*coder).iter),
-                    LZMA_INDEX_ITER_BLOCK,
-                ) != 0
-                {
-                    (*coder).pos = lzma_index_padding_size((*coder).index) as size_t;
+                if lzma_index_iter_next(&mut (*coder).iter, LZMA_INDEX_ITER_BLOCK) != 0 {
+                    (*coder).pos = lzma_index_padding_size(&*(*coder).index) as size_t;
                     (*coder).sequence = SEQ_PADDING;
                     continue;
                 } else {
@@ -73,15 +68,12 @@ unsafe fn index_encode(
             5 => {
                 if (*coder).pos > 0 {
                     (*coder).pos -= 1;
-                    *out.offset(*out_pos as isize) = 0;
+                    *out.add(*out_pos) = 0;
                     *out_pos += 1;
                     continue;
                 } else {
-                    (*coder).crc32 = lzma_crc32(
-                        out.offset(out_start as isize),
-                        *out_pos - out_start,
-                        (*coder).crc32,
-                    );
+                    (*coder).crc32 =
+                        lzma_crc32(out.add(out_start), *out_pos - out_start, (*coder).crc32);
                     (*coder).sequence = SEQ_CRC32;
                 }
             }
@@ -96,10 +88,9 @@ unsafe fn index_encode(
             };
             ret = lzma_vli_encode(
                 size,
-                ::core::ptr::addr_of_mut!((*coder).pos),
-                out,
-                out_pos,
-                out_size,
+                Some(&mut (*coder).pos),
+                c_slice_mut(out, out_size),
+                &mut *out_pos,
             );
             if ret != LZMA_STREAM_END {
                 break;
@@ -112,8 +103,7 @@ unsafe fn index_encode(
                 if *out_pos == out_size {
                     return LZMA_OK;
                 }
-                *out.offset(*out_pos as isize) =
-                    ((*coder).crc32 >> ((*coder).pos * 8) & 0xff) as u8;
+                *out.add(*out_pos) = ((*coder).crc32 >> ((*coder).pos * 8) & 0xff) as u8;
                 *out_pos += 1;
                 (*coder).pos += 1;
                 if (*coder).pos >= 4 {
@@ -125,7 +115,7 @@ unsafe fn index_encode(
     }
     let out_used: size_t = *out_pos - out_start;
     if out_used > 0 {
-        (*coder).crc32 = lzma_crc32(out.offset(out_start as isize), out_used, (*coder).crc32);
+        (*coder).crc32 = lzma_crc32(out.add(out_start), out_used, (*coder).crc32);
     }
     ret
 }
@@ -133,7 +123,7 @@ unsafe fn index_encoder_end(coder: *mut c_void, allocator: *const lzma_allocator
     crate::alloc::internal_free(coder as *mut lzma_index_coder, allocator);
 }
 unsafe fn index_encoder_reset(coder: *mut lzma_index_coder, i: *const lzma_index) {
-    lzma_index_iter_init(::core::ptr::addr_of_mut!((*coder).iter), i);
+    lzma_index_iter_init(&mut (*coder).iter, &*i);
     (*coder).sequence = SEQ_INDICATOR;
     (*coder).index = i;
     (*coder).pos = 0;
@@ -229,7 +219,7 @@ pub unsafe fn lzma_index_buffer_encode(
     if i.is_null() || out.is_null() || out_pos.is_null() || *out_pos > out_size {
         return LZMA_PROG_ERROR;
     }
-    if ((out_size - *out_pos) as lzma_vli) < lzma_index_size(i) {
+    if ((out_size - *out_pos) as lzma_vli) < lzma_index_size(&*i) {
         return LZMA_BUF_ERROR;
     }
     let mut coder: lzma_index_coder = lzma_index_coder {

@@ -60,11 +60,10 @@ pub unsafe fn lzma_stream_buffer_encode(
         reserved_int1: 0,
         reserved_int2: 0,
     };
-    if lzma_stream_header_encode(
-        ::core::ptr::addr_of_mut!(stream_flags),
-        out.offset(out_pos as isize),
-    ) != LZMA_OK
-    {
+    // SAFETY: the guard above rejected an output buffer with fewer than
+    // 2 * LZMA_STREAM_HEADER_SIZE bytes left, so the header fits. That the
+    // caller's pointer really covers out_size is the C contract.
+    if lzma_stream_header_encode(&stream_flags, &mut *out.add(out_pos).cast()) != LZMA_OK {
         return LZMA_PROG_ERROR;
     }
     out_pos += LZMA_STREAM_HEADER_SIZE as size_t;
@@ -129,17 +128,15 @@ pub unsafe fn lzma_stream_buffer_encode(
     }
     if ret == LZMA_OK {
         ret = lzma_index_buffer_encode(i, out, ::core::ptr::addr_of_mut!(out_pos), out_size);
-        stream_flags.backward_size = lzma_index_size(i);
+        stream_flags.backward_size = lzma_index_size(&*i);
     }
     lzma_index_end(i, allocator);
     if ret != LZMA_OK {
         return ret;
     }
-    if lzma_stream_footer_encode(
-        ::core::ptr::addr_of_mut!(stream_flags),
-        out.offset(out_pos as isize),
-    ) != LZMA_OK
-    {
+    // SAFETY: out_size had LZMA_STREAM_HEADER_SIZE subtracted before the
+    // Block was written, so the footer fits in what the guard reserved.
+    if lzma_stream_footer_encode(&stream_flags, &mut *out.add(out_pos).cast()) != LZMA_OK {
         return LZMA_PROG_ERROR;
     }
     out_pos += LZMA_STREAM_HEADER_SIZE as size_t;

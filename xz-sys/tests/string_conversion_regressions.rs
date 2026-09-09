@@ -3,7 +3,7 @@
 use std::ffi::CStr;
 use std::ptr;
 
-use xz_sys::{lzma_filter, lzma_str_to_filters, LZMA_VLI_UNKNOWN};
+use xz_sys::{LZMA_VLI_UNKNOWN, lzma_filter, lzma_str_to_filters};
 
 type CInt = std::os::raw::c_int;
 

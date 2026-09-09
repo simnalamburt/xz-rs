@@ -88,9 +88,8 @@ unsafe fn simple_code(
         let out_start: size_t = *out_pos;
         if buf_avail > 0 {
             core::ptr::copy_nonoverlapping(
-                (::core::ptr::addr_of_mut!(coder.buffer) as *mut u8).offset(coder.pos as isize)
-                    as *const u8,
-                out.offset(*out_pos as isize) as *mut u8,
+                (::core::ptr::addr_of_mut!(coder.buffer) as *mut u8).add(coder.pos) as *const u8,
+                out.add(*out_pos) as *mut u8,
                 buf_avail,
             );
         }
@@ -118,15 +117,14 @@ unsafe fn simple_code(
         } else if unfiltered > 0 {
             *out_pos -= unfiltered;
             core::ptr::copy_nonoverlapping(
-                out.offset(*out_pos as isize) as *const u8,
+                out.add(*out_pos) as *const u8,
                 ::core::ptr::addr_of_mut!(coder.buffer) as *mut u8,
                 unfiltered,
             );
         }
     } else if coder.pos > 0 {
         core::ptr::copy(
-            (::core::ptr::addr_of_mut!(coder.buffer) as *mut u8).offset(coder.pos as isize)
-                as *const u8,
+            (::core::ptr::addr_of_mut!(coder.buffer) as *mut u8).add(coder.pos) as *const u8,
             ::core::ptr::addr_of_mut!(coder.buffer) as *mut u8,
             buf_avail,
         );

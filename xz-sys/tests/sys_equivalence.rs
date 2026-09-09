@@ -59,7 +59,7 @@ fn parse_feature_table(cargo_toml: &str) -> BTreeMap<String, Vec<String>> {
 
 #[test]
 fn rs_sys_avoids_literal_lzma_const_defs() {
-    let src = include_str!("../xz-sys/src/lib.rs");
+    let src = include_str!("../src/lib.rs");
     let mut stmt = String::new();
     let mut start_line = 0usize;
     let mut in_const = false;
@@ -90,7 +90,7 @@ fn rs_sys_avoids_literal_lzma_const_defs() {
 
 #[test]
 fn rs_sys_uses_libc_size_t() {
-    let src = include_str!("../xz-sys/src/lib.rs");
+    let src = include_str!("../src/lib.rs");
     assert!(
         src.contains("use libc::size_t;"),
         "xz-sys must import libc::size_t directly"
@@ -103,7 +103,7 @@ fn rs_sys_uses_libc_size_t() {
 
 #[test]
 fn rs_sys_exports_required_public_wrappers() {
-    let src = include_str!("../xz-sys/src/lib.rs");
+    let src = include_str!("../src/lib.rs");
 
     for name in [
         "lzma_alloc",
@@ -125,7 +125,7 @@ fn rs_sys_exports_required_public_wrappers() {
 
 #[test]
 fn xz_sys_keeps_liblzma_sys_compatible_features() {
-    let rs_sys_features = parse_feature_table(include_str!("../xz-sys/Cargo.toml"));
+    let rs_sys_features = parse_feature_table(include_str!("../Cargo.toml"));
     // Keep this list aligned with liblzma-sys 0.4.6 so xz-sys remains a
     // drop-in feature-compatible replacement for consumers.
     let expected = BTreeMap::from([
@@ -497,10 +497,7 @@ fn api_functions_are_exported() {
         lzma_stream_buffer_decode,
         lzma_stream_buffer_encode,
         lzma_stream_decoder,
-        lzma_stream_decoder_mt,
         lzma_stream_encoder,
-        lzma_stream_encoder_mt,
-        lzma_stream_encoder_mt_memusage,
         lzma_stream_flags_compare,
         lzma_stream_footer_decode,
         lzma_stream_footer_encode,
@@ -511,6 +508,15 @@ fn api_functions_are_exported() {
         lzma_vli_decode,
         lzma_vli_encode,
         lzma_vli_size,
+    );
+
+    // The multithreaded entry points exist only when xz-sys is built with the
+    // parallel feature, so they are compared in a separate invocation.
+    #[cfg(feature = "parallel")]
+    assert_fn_exported!(
+        lzma_stream_decoder_mt,
+        lzma_stream_encoder_mt,
+        lzma_stream_encoder_mt_memusage,
     );
 }
 
@@ -676,8 +682,8 @@ fn differential_roundtrip_across_backends() {
 
 #[test]
 fn differential_error_codes_on_invalid_corpus() {
-    let files_dir = Path::new("vendor/xz/tests/files");
-    for entry in fs::read_dir(files_dir).expect("read xz test corpus directory") {
+    let files_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vendor/xz/tests/files");
+    for entry in fs::read_dir(&files_dir).expect("read xz test corpus directory") {
         let path = entry.expect("dir entry").path();
         if path.extension().and_then(|s| s.to_str()) != Some("xz") {
             continue;

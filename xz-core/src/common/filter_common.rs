@@ -148,20 +148,20 @@ pub unsafe fn lzma_filters_copy(
     let mut i: size_t = 0;
     i = 0;
     's_15: loop {
-        if (*src.offset(i as isize)).id == LZMA_VLI_UNKNOWN {
+        if (*src.add(i)).id == LZMA_VLI_UNKNOWN {
             break;
         }
         if i == LZMA_FILTERS_MAX as size_t {
             ret = LZMA_OPTIONS_ERROR;
             break 's_15;
         } else {
-            dest[i as usize].id = (*src.offset(i as isize)).id;
-            if (*src.offset(i as isize)).options.is_null() {
+            dest[i as usize].id = (*src.add(i)).id;
+            if (*src.add(i)).options.is_null() {
                 dest[i as usize].options = core::ptr::null_mut();
             } else {
                 let mut j: size_t = 0;
                 j = 0;
-                while (*src.offset(i as isize)).id != FEATURES[j as usize].id {
+                while (*src.add(i)).id != FEATURES[j as usize].id {
                     if FEATURES[j as usize].id == LZMA_VLI_UNKNOWN {
                         ret = LZMA_OPTIONS_ERROR;
                         break 's_15;
@@ -178,7 +178,7 @@ pub unsafe fn lzma_filters_copy(
                     break 's_15;
                 } else {
                     core::ptr::copy_nonoverlapping(
-                        (*src.offset(i as isize)).options as *const u8,
+                        (*src.add(i)).options as *const u8,
                         dest[i as usize].options as *mut u8,
                         FEATURES[j as usize].options_size,
                     );
@@ -208,13 +208,13 @@ pub unsafe fn lzma_filters_free(filters: *mut lzma_filter, allocator: *const lzm
         return;
     }
     let mut i: size_t = 0;
-    while (*filters.offset(i as isize)).id != LZMA_VLI_UNKNOWN {
+    while (*filters.add(i)).id != LZMA_VLI_UNKNOWN {
         if i == LZMA_FILTERS_MAX as size_t {
             break;
         }
-        lzma_filter_options_free(*filters.offset(i as isize), allocator);
-        (*filters.offset(i as isize)).options = core::ptr::null_mut();
-        (*filters.offset(i as isize)).id = LZMA_VLI_UNKNOWN;
+        lzma_filter_options_free(*filters.add(i), allocator);
+        (*filters.add(i)).options = core::ptr::null_mut();
+        (*filters.add(i)).id = LZMA_VLI_UNKNOWN;
         i += 1;
     }
 }
@@ -229,7 +229,7 @@ pub unsafe fn lzma_validate_chain(filters: *const lzma_filter, count: *mut size_
     loop {
         let mut j: size_t = 0;
         j = 0;
-        while (*filters.offset(i as isize)).id != FEATURES[j as usize].id {
+        while (*filters.add(i)).id != FEATURES[j as usize].id {
             if FEATURES[j as usize].id == LZMA_VLI_UNKNOWN {
                 return LZMA_OPTIONS_ERROR;
             }
@@ -242,7 +242,7 @@ pub unsafe fn lzma_validate_chain(filters: *const lzma_filter, count: *mut size_
         last_ok = FEATURES[j as usize].last_ok;
         changes_size_count += FEATURES[j as usize].changes_size as size_t;
         i += 1;
-        if (*filters.offset(i as isize)).id == LZMA_VLI_UNKNOWN {
+        if (*filters.add(i)).id == LZMA_VLI_UNKNOWN {
             break;
         }
     }
@@ -274,26 +274,26 @@ pub unsafe fn lzma_raw_coder_init(
         while i < count {
             let j: size_t = count - i - 1;
             let fc: *const lzma_filter_coder =
-                coder_find((*options.offset(i as isize)).id) as *const lzma_filter_coder;
+                coder_find((*options.add(i)).id) as *const lzma_filter_coder;
             if fc.is_null() || (*fc).init.is_none() {
                 return LZMA_OPTIONS_ERROR;
             }
-            filters[j as usize].id = (*options.offset(i as isize)).id;
+            filters[j as usize].id = (*options.add(i)).id;
             filters[j as usize].init = (*fc).init;
-            filters[j as usize].options = (*options.offset(i as isize)).options;
+            filters[j as usize].options = (*options.add(i)).options;
             i += 1;
         }
     } else {
         let mut i_0: size_t = 0;
         while i_0 < count {
             let fc_0: *const lzma_filter_coder =
-                coder_find((*options.offset(i_0 as isize)).id) as *const lzma_filter_coder;
+                coder_find((*options.add(i_0)).id) as *const lzma_filter_coder;
             if fc_0.is_null() || (*fc_0).init.is_none() {
                 return LZMA_OPTIONS_ERROR;
             }
-            filters[i_0 as usize].id = (*options.offset(i_0 as isize)).id;
+            filters[i_0 as usize].id = (*options.add(i_0)).id;
             filters[i_0 as usize].init = (*fc_0).init;
-            filters[i_0 as usize].options = (*options.offset(i_0 as isize)).options;
+            filters[i_0 as usize].options = (*options.add(i_0)).options;
             i_0 += 1;
         }
     }
@@ -321,12 +321,12 @@ pub unsafe fn lzma_raw_coder_memusage(
     let mut i: size_t = 0;
     loop {
         let fc: *const lzma_filter_coder =
-            coder_find((*filters.offset(i as isize)).id) as *const lzma_filter_coder;
+            coder_find((*filters.add(i)).id) as *const lzma_filter_coder;
         if fc.is_null() {
             return UINT64_MAX;
         }
         if let Some(memusage) = (*fc).memusage {
-            let usage: u64 = memusage((*filters.offset(i as isize)).options) as u64;
+            let usage: u64 = memusage((*filters.add(i)).options) as u64;
             if usage == UINT64_MAX {
                 return UINT64_MAX;
             }
@@ -335,7 +335,7 @@ pub unsafe fn lzma_raw_coder_memusage(
             total += 1024;
         }
         i += 1;
-        if (*filters.offset(i as isize)).id == LZMA_VLI_UNKNOWN {
+        if (*filters.add(i)).id == LZMA_VLI_UNKNOWN {
             break;
         }
     }

@@ -82,7 +82,7 @@ unsafe fn fill_window(
     };
     (*coder).mf.write_pos = write_pos as u32;
     core::ptr::write_bytes(
-        (*coder).mf.buffer.offset(write_pos as isize) as *mut u8,
+        (*coder).mf.buffer.add(write_pos) as *mut u8,
         0 as u8,
         LZMA_MEMCMPLEN_EXTRA as usize,
     );
@@ -308,7 +308,7 @@ unsafe fn lz_encoder_init(
     (*mf).action = LZMA_RUN;
     false
 }
-pub fn lzma_lz_encoder_memusage(lz_options: *const lzma_lz_options) -> u64 {
+pub fn lzma_lz_encoder_memusage(lz_options: &lzma_lz_options) -> u64 {
     let mut mf: lzma_mf = lzma_mf_s {
         buffer: core::ptr::null_mut(),
         size: 0,

@@ -73,7 +73,7 @@ unsafe fn lzip_decode(
                             LZMA_OK
                         };
                     }
-                    if *input.offset(*in_pos as isize) != lzip_id_string[(*coder).pos as usize] {
+                    if *input.add(*in_pos) != lzip_id_string[(*coder).pos as usize] {
                         return if !(*coder).first_member {
                             LZMA_STREAM_END
                         } else {
@@ -112,7 +112,7 @@ unsafe fn lzip_decode(
                 if *in_pos >= in_size {
                     return LZMA_OK;
                 }
-                (*coder).version = *input.offset(*in_pos as isize) as u32;
+                (*coder).version = *input.add(*in_pos) as u32;
                 *in_pos += 1;
                 if (*coder).version > 1 {
                     return LZMA_OPTIONS_ERROR;
@@ -131,7 +131,7 @@ unsafe fn lzip_decode(
                 if *in_pos >= in_size {
                     return LZMA_OK;
                 }
-                let ds: u32 = *input.offset(*in_pos as isize) as u32;
+                let ds: u32 = *input.add(*in_pos) as u32;
                 *in_pos += 1;
                 (*coder).member_size += 1;
                 let b2log: u32 = ds & 0x1f;
@@ -214,8 +214,7 @@ unsafe fn lzip_decode(
                 (*coder).member_size += (*in_pos - in_start) as u64;
                 (*coder).uncompressed_size += out_used as u64;
                 if !(*coder).ignore_check && out_used > 0 {
-                    (*coder).crc32 =
-                        lzma_crc32(out.offset(out_start as isize), out_used, (*coder).crc32);
+                    (*coder).crc32 = lzma_crc32(out.add(out_start), out_used, (*coder).crc32);
                 }
                 if ret != LZMA_STREAM_END {
                     return ret;

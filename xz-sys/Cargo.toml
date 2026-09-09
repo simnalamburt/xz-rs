@@ -24,3 +24,6 @@ wasm = ["static", "bindgen"]
 [dependencies]
 xz-core = { path = "../xz-core", version = "0.1.0-rc.0", features = ["custom_allocator"] }
 libc = "0.2"
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+liblzma-sys = { version = "0.4.6", features = ["parallel"] }

@@ -28,7 +28,7 @@ pub struct lzma_next_coder_s {
     pub init: uintptr_t,
     pub code: lzma_code_function,
     pub end: lzma_end_function,
-    pub get_progress: Option<unsafe fn(*mut c_void, *mut u64, *mut u64) -> ()>,
+    pub get_progress: Option<unsafe fn(*mut c_void, &mut u64, &mut u64) -> ()>,
     pub get_check: Option<unsafe fn(*const c_void) -> lzma_check>,
     pub memconfig: Option<unsafe fn(*mut c_void, *mut u64, *mut u64, u64) -> lzma_ret>,
     pub update: Option<

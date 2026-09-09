@@ -88,7 +88,7 @@ unsafe fn block_decode(
                 lzma_check_update(
                     ::core::ptr::addr_of_mut!((*coder).check),
                     (*(*coder).block).check,
-                    out.offset(out_start as isize),
+                    out.add(out_start),
                     out_used,
                 );
             }
@@ -116,7 +116,7 @@ unsafe fn block_decode(
                 return LZMA_OK;
             }
             (*coder).compressed_size += 1;
-            let byte = *input.offset(*in_pos as isize);
+            let byte = *input.add(*in_pos);
             *in_pos += 1;
             if byte != 0 {
                 return LZMA_DATA_ERROR;

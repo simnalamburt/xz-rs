@@ -103,7 +103,7 @@ unsafe fn str_finish(
         *dest = core::ptr::null_mut();
         return LZMA_PROG_ERROR;
     }
-    *(*str).buf.offset((*str).pos as isize) = '\0' as i32 as c_char;
+    *(*str).buf.add((*str).pos) = '\0' as i32 as c_char;
     *dest = (*str).buf;
     LZMA_OK
 }
@@ -113,7 +113,7 @@ unsafe fn str_append_str(str: *mut lzma_str, s: *const c_char) {
     let copy_size: size_t = if len < limit { len } else { limit };
     core::ptr::copy_nonoverlapping(
         s as *const u8,
-        (*str).buf.offset((*str).pos as isize) as *mut u8,
+        (*str).buf.add((*str).pos) as *mut u8,
         copy_size,
     );
     (*str).pos += copy_size;
@@ -147,7 +147,7 @@ unsafe fn str_append_u32(str: *mut lzma_str, mut v: u32, use_byte_suffix: bool) 
         }
         str_append_str(
             str,
-            (::core::ptr::addr_of_mut!(buf) as *mut c_char).offset(pos as isize),
+            (::core::ptr::addr_of_mut!(buf) as *mut c_char).add(pos),
         );
         str_append_str(str, SUFFIXES[suf as usize].as_ptr());
     };
@@ -251,7 +251,7 @@ unsafe fn set_lzma12_preset(
         return errmsg;
     }
     let opts: *mut lzma_options_lzma = filter_options as *mut lzma_options_lzma;
-    if lzma_lzma_preset(opts, preset) != 0 {
+    if lzma_lzma_preset(&mut *opts, preset) != 0 {
         return crate::c_str!("Unsupported preset");
     }
     core::ptr::null()
@@ -400,7 +400,7 @@ unsafe fn parse_lzma12(
     filter_options: *mut c_void,
 ) -> *const c_char {
     let opts: *mut lzma_options_lzma = filter_options as *mut lzma_options_lzma;
-    let _preset_ret: bool = lzma_lzma_preset(opts, LZMA_PRESET_DEFAULT as u32) != 0;
+    let _preset_ret: bool = lzma_lzma_preset(&mut *opts, LZMA_PRESET_DEFAULT as u32) != 0;
     let errmsg: *const c_char = parse_options(
         str,
         str_end,
@@ -590,10 +590,10 @@ unsafe fn parse_options(
                 }
                 if memcmp(
                     *str as *const c_void,
-                    ::core::ptr::addr_of!((*optmap.offset(i as isize)).name) as *const c_void,
+                    ::core::ptr::addr_of!((*optmap.add(i)).name) as *const c_void,
                     name_len,
                 ) == 0
-                    && (*optmap.offset(i as isize)).name[name_len as usize] == 0
+                    && (*optmap.add(i)).name[name_len as usize] == 0
                 {
                     break;
                 }
@@ -604,7 +604,7 @@ unsafe fn parse_options(
             if value_len == 0 {
                 return crate::c_str!("Option value cannot be empty");
             }
-            if (*optmap.offset(i as isize)).option_type == OPTMAP_TYPE_LZMA_PRESET {
+            if (*optmap.add(i)).option_type == OPTMAP_TYPE_LZMA_PRESET {
                 let errmsg: *const c_char =
                     set_lzma12_preset(str, name_eq_value_end, filter_options);
                 if !errmsg.is_null() {
@@ -612,24 +612,24 @@ unsafe fn parse_options(
                 }
             } else {
                 let mut v: u32 = 0;
-                if (*optmap.offset(i as isize)).flags & OPTMAP_USE_NAME_VALUE_MAP != 0 {
+                if (*optmap.add(i)).flags & OPTMAP_USE_NAME_VALUE_MAP != 0 {
                     if value_len > NAME_LEN_MAX as size_t {
                         return crate::c_str!("Invalid option value");
                     }
-                    let map: *const name_value_map = (*optmap.offset(i as isize)).u.map;
+                    let map: *const name_value_map = (*optmap.add(i)).u.map;
                     let mut j: size_t = 0;
                     loop {
-                        if (*map.offset(j as isize)).name[0] == 0 {
+                        if (*map.add(j)).name[0] == 0 {
                             return crate::c_str!("Invalid option value");
                         }
                         if memcmp(
                             *str as *const c_void,
-                            ::core::ptr::addr_of!((*map.offset(j as isize)).name) as *const c_void,
+                            ::core::ptr::addr_of!((*map.add(j)).name) as *const c_void,
                             value_len,
                         ) == 0
-                            && (*map.offset(j as isize)).name[value_len as usize] == 0
+                            && (*map.add(j)).name[value_len as usize] == 0
                         {
-                            v = (*map.offset(j as isize)).value;
+                            v = (*map.add(j)).value;
                             break;
                         } else {
                             j += 1;
@@ -658,7 +658,7 @@ unsafe fn parse_options(
                     }
                     if p < name_eq_value_end {
                         let multiplier_start: *const c_char = p;
-                        if (*optmap.offset(i as isize)).flags & OPTMAP_USE_BYTE_SUFFIX == 0 {
+                        if (*optmap.add(i)).flags & OPTMAP_USE_BYTE_SUFFIX == 0 {
                             *str = multiplier_start;
                             return b"This option does not support any multiplier suffixes\0"
                                 as *const u8 as *const c_char;
@@ -698,16 +698,14 @@ unsafe fn parse_options(
                         }
                         v <<= shift;
                     }
-                    if v < (*optmap.offset(i as isize)).u.range.min
-                        || v > (*optmap.offset(i as isize)).u.range.max
-                    {
+                    if v < (*optmap.add(i)).u.range.min || v > (*optmap.add(i)).u.range.max {
                         return crate::c_str!("Value out of range");
                     }
                 }
                 let ptr: *mut c_void = (filter_options as *mut c_char)
-                    .offset((*optmap.offset(i as isize)).offset as isize)
+                    .offset((*optmap.add(i)).offset as isize)
                     as *mut c_void;
-                match (*optmap.offset(i as isize)).option_type {
+                match (*optmap.add(i)).option_type {
                     1 => {
                         *(ptr as *mut lzma_mode) = v as lzma_mode;
                     }
@@ -754,9 +752,7 @@ unsafe fn parse_filter(
         if memcmp(
             *str as *const c_void,
             ::core::ptr::addr_of!(
-                (*(::core::ptr::addr_of!(filter_name_map) as *const filter_codec_def)
-                    .offset(i as isize))
-                .name
+                (*(::core::ptr::addr_of!(filter_name_map) as *const filter_codec_def).add(i)).name
             ) as *const c_void,
             name_len,
         ) == 0
@@ -819,14 +815,14 @@ unsafe fn str_to_filters(
             memchr(*str as *const c_void, ' ' as i32, str_len) as *const c_char;
         if !str_end.is_null() {
             let mut i: size_t = 1;
-            while *str_end.offset(i as isize) != 0 {
-                if *str_end.offset(i as isize) as u8 != b' ' {
+            while *str_end.add(i) != 0 {
+                if *str_end.add(i) as u8 != b' ' {
                     return crate::c_str!("Unsupported preset");
                 }
                 i += 1;
             }
         } else {
-            str_end = (*str).offset(str_len as isize);
+            str_end = (*str).add(str_len);
         }
         let mut preset: u32 = 0;
         errmsg = parse_lzma12_preset(str, str_end, ::core::ptr::addr_of_mut!(preset));
@@ -838,7 +834,7 @@ unsafe fn str_to_filters(
         if opts.is_null() {
             return crate::c_str!("Memory allocation failed");
         }
-        if lzma_lzma_preset(opts, preset) != 0 {
+        if lzma_lzma_preset(&mut *opts, preset) != 0 {
             crate::alloc::internal_free(opts, allocator);
             return crate::c_str!("Unsupported preset");
         }
@@ -878,8 +874,8 @@ unsafe fn str_to_filters(
                 errmsg = parse_filter(
                     str,
                     filter_end,
-                    (::core::ptr::addr_of_mut!(temp_filters) as *mut lzma_filter)
-                        .offset(i_0 as isize) as *mut lzma_filter,
+                    (::core::ptr::addr_of_mut!(temp_filters) as *mut lzma_filter).add(i_0)
+                        as *mut lzma_filter,
                     allocator,
                     only_xz,
                 );
@@ -970,12 +966,12 @@ unsafe fn strfy_filter(
 ) {
     let mut i: size_t = 0;
     while i < optmap_count {
-        if (*optmap.offset(i as isize)).option_type != OPTMAP_TYPE_LZMA_PRESET {
+        if (*optmap.add(i)).option_type != OPTMAP_TYPE_LZMA_PRESET {
             let mut v: u32 = 0;
             let ptr: *const c_void = (filter_options as *const c_char)
-                .offset((*optmap.offset(i as isize)).offset as isize)
+                .offset((*optmap.add(i)).offset as isize)
                 as *const c_void;
-            match (*optmap.offset(i as isize)).option_type {
+            match (*optmap.add(i)).option_type {
                 1 => {
                     v = *(ptr as *const lzma_mode) as u32;
                 }
@@ -986,26 +982,25 @@ unsafe fn strfy_filter(
                     v = *(ptr as *const u32);
                 }
             }
-            if v != 0 || (*optmap.offset(i as isize)).flags & OPTMAP_NO_STRFY_ZERO == 0 {
+            if v != 0 || (*optmap.add(i)).flags & OPTMAP_NO_STRFY_ZERO == 0 {
                 str_append_str(dest, delimiter);
                 delimiter = crate::c_str!(",");
                 str_append_str(
                     dest,
-                    ::core::ptr::addr_of!((*optmap.offset(i as isize)).name) as *const c_char,
+                    ::core::ptr::addr_of!((*optmap.add(i)).name) as *const c_char,
                 );
                 str_append_str(dest, crate::c_str!("="));
-                if (*optmap.offset(i as isize)).flags & OPTMAP_USE_NAME_VALUE_MAP != 0 {
-                    let map: *const name_value_map = (*optmap.offset(i as isize)).u.map;
+                if (*optmap.add(i)).flags & OPTMAP_USE_NAME_VALUE_MAP != 0 {
+                    let map: *const name_value_map = (*optmap.add(i)).u.map;
                     let mut j: size_t = 0;
                     loop {
-                        if (*map.offset(j as isize)).name[0] == 0 {
+                        if (*map.add(j)).name[0] == 0 {
                             str_append_str(dest, crate::c_str!("UNKNOWN"));
                             break;
-                        } else if (*map.offset(j as isize)).value == v {
+                        } else if (*map.add(j)).value == v {
                             str_append_str(
                                 dest,
-                                ::core::ptr::addr_of!((*map.offset(j as isize)).name)
-                                    as *const c_char,
+                                ::core::ptr::addr_of!((*map.add(j)).name) as *const c_char,
                             );
                             break;
                         } else {
@@ -1016,7 +1011,7 @@ unsafe fn strfy_filter(
                     str_append_u32(
                         dest,
                         v,
-                        (*optmap.offset(i as isize)).flags & OPTMAP_USE_BYTE_SUFFIX != 0,
+                        (*optmap.add(i)).flags & OPTMAP_USE_BYTE_SUFFIX != 0,
                     );
                 }
             }
@@ -1063,7 +1058,7 @@ pub unsafe fn lzma_str_from_filters(
         crate::c_str!(":")
     };
     let mut i: size_t = 0;
-    while (*filters.offset(i as isize)).id != LZMA_VLI_UNKNOWN {
+    while (*filters.add(i)).id != LZMA_VLI_UNKNOWN {
         if i == LZMA_FILTERS_MAX as size_t {
             str_free(::core::ptr::addr_of_mut!(dest), allocator);
             return LZMA_OPTIONS_ERROR;
@@ -1084,19 +1079,19 @@ pub unsafe fn lzma_str_from_filters(
                 str_free(::core::ptr::addr_of_mut!(dest), allocator);
                 return LZMA_OPTIONS_ERROR;
             }
-            if filter_name_map[j as usize].id == (*filters.offset(i as isize)).id {
+            if filter_name_map[j as usize].id == (*filters.add(i)).id {
                 str_append_str(
                     ::core::ptr::addr_of_mut!(dest),
                     ::core::ptr::addr_of!(
                         (*(::core::ptr::addr_of!(filter_name_map) as *const filter_codec_def)
-                            .offset(j as isize))
+                            .add(j))
                         .name
                     ) as *const c_char,
                 );
                 if !show_opts {
                     break;
                 }
-                if (*filters.offset(i as isize)).options.is_null() {
+                if (*filters.add(i)).options.is_null() {
                     if !filter_name_map[j as usize].allow_null {
                         str_free(::core::ptr::addr_of_mut!(dest), allocator);
                         return LZMA_OPTIONS_ERROR;
@@ -1113,7 +1108,7 @@ pub unsafe fn lzma_str_from_filters(
                         opt_delim,
                         filter_name_map[j as usize].optmap,
                         optmap_count,
-                        (*filters.offset(i as isize)).options,
+                        (*filters.add(i)).options,
                     );
                     break;
                 }
@@ -1184,7 +1179,7 @@ pub unsafe fn lzma_str_list_filters(
                     ::core::ptr::addr_of_mut!(dest),
                     ::core::ptr::addr_of!(
                         (*(::core::ptr::addr_of!(filter_name_map) as *const filter_codec_def)
-                            .offset(i as isize))
+                            .add(i))
                         .name
                     ) as *const c_char,
                 );
@@ -1202,21 +1197,18 @@ pub unsafe fn lzma_str_list_filters(
                         d = crate::c_str!(",");
                         str_append_str(
                             ::core::ptr::addr_of_mut!(dest),
-                            ::core::ptr::addr_of!((*optmap.offset(j as isize)).name)
-                                as *const c_char,
+                            ::core::ptr::addr_of!((*optmap.add(j)).name) as *const c_char,
                         );
                         str_append_str(::core::ptr::addr_of_mut!(dest), crate::c_str!("=<"));
-                        if (*optmap.offset(j as isize)).option_type == OPTMAP_TYPE_LZMA_PRESET {
+                        if (*optmap.add(j)).option_type == OPTMAP_TYPE_LZMA_PRESET {
                             str_append_str(
                                 ::core::ptr::addr_of_mut!(dest),
                                 LZMA12_PRESET_STR.as_ptr(),
                             );
-                        } else if (*optmap.offset(j as isize)).flags & OPTMAP_USE_NAME_VALUE_MAP
-                            != 0
-                        {
-                            let m: *const name_value_map = (*optmap.offset(j as isize)).u.map;
+                        } else if (*optmap.add(j)).flags & OPTMAP_USE_NAME_VALUE_MAP != 0 {
+                            let m: *const name_value_map = (*optmap.add(j)).u.map;
                             let mut k: size_t = 0;
-                            while (*m.offset(k as isize)).name[0] != 0 {
+                            while (*m.add(k)).name[0] != 0 {
                                 if k > 0 {
                                     str_append_str(
                                         ::core::ptr::addr_of_mut!(dest),
@@ -1225,23 +1217,22 @@ pub unsafe fn lzma_str_list_filters(
                                 }
                                 str_append_str(
                                     ::core::ptr::addr_of_mut!(dest),
-                                    ::core::ptr::addr_of!((*m.offset(k as isize)).name)
-                                        as *const c_char,
+                                    ::core::ptr::addr_of!((*m.add(k)).name) as *const c_char,
                                 );
                                 k += 1;
                             }
                         } else {
                             let use_byte_suffix: bool =
-                                (*optmap.offset(j as isize)).flags & OPTMAP_USE_BYTE_SUFFIX != 0;
+                                (*optmap.add(j)).flags & OPTMAP_USE_BYTE_SUFFIX != 0;
                             str_append_u32(
                                 ::core::ptr::addr_of_mut!(dest),
-                                (*optmap.offset(j as isize)).u.range.min,
+                                (*optmap.add(j)).u.range.min,
                                 use_byte_suffix,
                             );
                             str_append_str(::core::ptr::addr_of_mut!(dest), crate::c_str!("-"));
                             str_append_u32(
                                 ::core::ptr::addr_of_mut!(dest),
-                                (*optmap.offset(j as isize)).u.range.max,
+                                (*optmap.add(j)).u.range.max,
                                 use_byte_suffix,
                             );
                         }

@@ -62,8 +62,8 @@ pub unsafe fn lzma_bufcpy(
     };
     if copy_size > 0 {
         core::ptr::copy_nonoverlapping(
-            input.offset(*in_pos as isize) as *const u8,
-            out.offset(*out_pos as isize) as *mut u8,
+            input.add(*in_pos) as *const u8,
+            out.add(*out_pos) as *mut u8,
             copy_size,
         );
     }
@@ -240,12 +240,12 @@ pub unsafe fn lzma_code(strm: *mut lzma_stream, action: lzma_action) -> lzma_ret
         action,
     );
     if in_pos > 0 {
-        (*strm).next_in = (*strm).next_in.offset(in_pos as isize);
+        (*strm).next_in = (*strm).next_in.add(in_pos);
         (*strm).avail_in -= in_pos;
         (*strm).total_in = (*strm).total_in.wrapping_add(in_pos as u64);
     }
     if out_pos > 0 {
-        (*strm).next_out = (*strm).next_out.offset(out_pos as isize);
+        (*strm).next_out = (*strm).next_out.add(out_pos);
         (*strm).avail_out -= out_pos;
         (*strm).total_out = (*strm).total_out.wrapping_add(out_pos as u64);
     }
@@ -302,18 +302,17 @@ pub unsafe fn lzma_end(strm: *mut lzma_stream) {
         (*strm).internal = core::ptr::null_mut();
     }
 }
+/// # Safety
+/// `strm` may be NULL or zeroed, but if `internal` is set it must be the
+/// coder `lzma_strm_init` installed.
 pub unsafe fn lzma_get_progress(
     strm: *mut lzma_stream,
-    progress_in: *mut u64,
-    progress_out: *mut u64,
+    progress_in: &mut u64,
+    progress_out: &mut u64,
 ) {
     if strm.is_null() || (*strm).internal.is_null() {
-        if !progress_in.is_null() {
-            *progress_in = 0;
-        }
-        if !progress_out.is_null() {
-            *progress_out = 0;
-        }
+        *progress_in = 0;
+        *progress_out = 0;
         return;
     }
 
@@ -324,7 +323,7 @@ pub unsafe fn lzma_get_progress(
         *progress_out = (*strm).total_out;
     };
 }
-pub fn lzma_get_check(strm: *const lzma_stream) -> lzma_check {
+pub unsafe fn lzma_get_check(strm: *const lzma_stream) -> lzma_check {
     unsafe {
         if strm.is_null() || (*strm).internal.is_null() {
             return LZMA_CHECK_NONE;
@@ -336,7 +335,7 @@ pub fn lzma_get_check(strm: *const lzma_stream) -> lzma_check {
         }
     }
 }
-pub fn lzma_memusage(strm: *const lzma_stream) -> u64 {
+pub unsafe fn lzma_memusage(strm: *const lzma_stream) -> u64 {
     unsafe {
         let mut memusage: u64 = 0;
         let mut old_memlimit: u64 = 0;
@@ -358,7 +357,7 @@ pub fn lzma_memusage(strm: *const lzma_stream) -> u64 {
         memusage
     }
 }
-pub fn lzma_memlimit_get(strm: *const lzma_stream) -> u64 {
+pub unsafe fn lzma_memlimit_get(strm: *const lzma_stream) -> u64 {
     unsafe {
         let mut old_memlimit: u64 = 0;
         let mut memusage: u64 = 0;

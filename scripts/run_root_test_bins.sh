@@ -25,7 +25,6 @@ for ((repeat = 0; repeat < REPEATS; repeat++)); do
   for prefix in \
     "xz-" \
     "drop_incomplete-" \
-    "sys_equivalence-" \
     "standard_files-"
   do
     BIN=""

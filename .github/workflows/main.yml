@@ -67,6 +67,9 @@ jobs:
         cargo test
         cargo clean -p xz -p liblzma-sys
     - run: |
+        cargo test -p xz-sys --features parallel
+        cargo clean -p xz-sys -p liblzma-sys
+    - run: |
         cargo test --features parallel
         cargo clean -p xz -p liblzma-sys
     - run: |
@@ -80,10 +83,6 @@ jobs:
         cargo test --no-default-features --features liblzma-sys,parallel,static
         cargo clean -p xz -p liblzma-sys
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
-    - run: |
-        cargo test --test sys_equivalence
-        cargo clean -p xz -p liblzma-sys
-      if: ${{ !startsWith(matrix.os, 'ubuntu') }}
     - run: |
         cargo run --manifest-path systest/Cargo.toml --no-default-features --features xz-sys
         cargo clean -p xz-sys
@@ -100,6 +99,23 @@ jobs:
     - name: Install Rust
       run: rustup update stable && rustup default stable && rustup component add rustfmt
     - run: cargo fmt -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: true
+    - name: Install Rust
+      run: rustup update stable && rustup default stable && rustup component add clippy
+    # xz-core denies the soundness lints it used to hide behind `allow(clippy::all)`.
+    # Both feature combinations are checked because some code is gated on
+    # custom_allocator.
+    - run: |
+        cargo clippy -p xz-core --lib --all-targets
+        cargo clippy -p xz-core --lib --all-targets --features custom_allocator
+        cargo clippy -p xz-sys --lib --all-targets
 
   fuzz-smoke:
     name: Fuzz smoke

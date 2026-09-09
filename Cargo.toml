@@ -42,10 +42,6 @@ required-features = ["bench"]
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 
-[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-xz-sys = { path = "xz-sys", features = ["parallel"] }
-liblzma-sys = { version = "0.4.6", features = ["parallel"] }
-
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 wasm-bindgen-test = "0.3"
 
@@ -53,7 +49,9 @@ wasm-bindgen-test = "0.3"
 default = ["xz-core"]
 xz-core = ["dep:xz-core"]
 xz-sys = ["dep:xz-sys"]
-liblzma-sys = ["dep:liblzma-sys"]
+# The xz crate uses lzma_index and LZMA_STREAM_HEADER_SIZE, which
+# liblzma-sys only exposes from its bindgen-generated bindings.
+liblzma-sys = ["dep:liblzma-sys", "liblzma-sys/bindgen"]
 static = ["liblzma-sys?/static"]
 parallel = ["xz-sys?/parallel", "liblzma-sys?/parallel", "num_cpus"]
 bindgen = ["liblzma-sys?/bindgen"] # only affects liblzma-sys

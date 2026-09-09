@@ -6,11 +6,11 @@ use std::mem::MaybeUninit;
 use std::ptr;
 
 use xz_sys::{
+    LZMA_BUF_ERROR, LZMA_DATA_ERROR, LZMA_DICT_SIZE_DEFAULT, LZMA_DICT_SIZE_MIN, LZMA_FINISH,
+    LZMA_FULL_BARRIER, LZMA_FULL_FLUSH, LZMA_LCLP_MAX, LZMA_OK, LZMA_OPTIONS_ERROR,
+    LZMA_PRESET_DEFAULT, LZMA_PROG_ERROR, LZMA_RUN, LZMA_STREAM_END, LZMA_SYNC_FLUSH, LZMA_VLI_MAX,
     lzma_code, lzma_crc32, lzma_end, lzma_lzma_preset, lzma_microlzma_decoder,
-    lzma_microlzma_encoder, lzma_options_lzma, lzma_stream, LZMA_BUF_ERROR, LZMA_DATA_ERROR,
-    LZMA_DICT_SIZE_DEFAULT, LZMA_DICT_SIZE_MIN, LZMA_FINISH, LZMA_FULL_BARRIER, LZMA_FULL_FLUSH,
-    LZMA_LCLP_MAX, LZMA_OK, LZMA_OPTIONS_ERROR, LZMA_PRESET_DEFAULT, LZMA_PROG_ERROR, LZMA_RUN,
-    LZMA_STREAM_END, LZMA_SYNC_FLUSH, LZMA_VLI_MAX,
+    lzma_microlzma_encoder, lzma_options_lzma, lzma_stream,
 };
 
 const BUFFER_SIZE: usize = 1024;

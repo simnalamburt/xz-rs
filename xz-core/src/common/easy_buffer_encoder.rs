@@ -11,11 +11,11 @@ pub unsafe fn lzma_easy_buffer_encode(
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
-    let mut opt_easy = MaybeUninit::<lzma_options_easy>::uninit();
-    if lzma_easy_preset(opt_easy.as_mut_ptr(), preset) {
+    // See lzma_easy_encoder for why this is zeroed.
+    let mut opt_easy = MaybeUninit::<lzma_options_easy>::zeroed().assume_init();
+    if lzma_easy_preset(&mut opt_easy, preset) {
         return LZMA_OPTIONS_ERROR;
     }
-    let opt_easy = opt_easy.assume_init_mut();
     lzma_stream_buffer_encode(
         ::core::ptr::addr_of_mut!(opt_easy.filters) as *mut lzma_filter,
         check,

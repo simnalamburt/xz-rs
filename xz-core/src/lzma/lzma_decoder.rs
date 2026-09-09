@@ -109,7 +109,7 @@ pub struct lzma_length_decoder {
 }
 #[inline]
 unsafe fn dict_get(dict: *const lzma_dict, distance: u32) -> u8 {
-    *(*dict).buf.offset(
+    *(*dict).buf.add(
         (*dict)
             .pos
             .wrapping_sub(distance as size_t)
@@ -118,12 +118,12 @@ unsafe fn dict_get(dict: *const lzma_dict, distance: u32) -> u8 {
                 0
             } else {
                 (*dict).size.wrapping_sub(LZ_DICT_REPEAT_MAX as size_t)
-            }) as isize,
+            }),
     )
 }
 #[inline]
 unsafe fn dict_get0(dict: *const lzma_dict) -> u8 {
-    *(*dict).buf.offset((*dict).pos.wrapping_sub(1) as isize)
+    *(*dict).buf.add((*dict).pos.wrapping_sub(1))
 }
 #[inline]
 unsafe fn dict_is_distance_valid(dict: *const lzma_dict, distance: size_t) -> bool {
@@ -144,7 +144,7 @@ unsafe fn dict_repeat(dict: *mut lzma_dict, distance: u32, len: *mut u32) -> boo
     }
     if distance < left {
         loop {
-            *(*dict).buf.offset((*dict).pos as isize) = *(*dict).buf.offset(back as isize);
+            *(*dict).buf.add((*dict).pos) = *(*dict).buf.add(back);
             back += 1;
             (*dict).pos = (*dict).pos.wrapping_add(1);
             left -= 1;
@@ -160,8 +160,8 @@ unsafe fn dict_repeat(dict: *mut lzma_dict, distance: u32, len: *mut u32) -> boo
         {
             const _: () = assert!(crate::lz::lz_decoder::LZ_DICT_EXTRA == 0);
             core::ptr::copy_nonoverlapping(
-                (*dict).buf.offset(back as isize) as *const u8,
-                (*dict).buf.offset((*dict).pos as isize) as *mut u8,
+                (*dict).buf.add(back) as *const u8,
+                (*dict).buf.add((*dict).pos) as *mut u8,
                 left as size_t,
             );
             (*dict).pos = (*dict).pos.wrapping_add(left as size_t);
@@ -198,7 +198,7 @@ unsafe fn dict_repeat(dict: *mut lzma_dict, distance: u32, len: *mut u32) -> boo
 }
 #[inline]
 unsafe fn dict_put(dict: *mut lzma_dict, byte: u8) {
-    *(*dict).buf.offset((*dict).pos as isize) = byte;
+    *(*dict).buf.add((*dict).pos) = byte;
     (*dict).pos = (*dict).pos.wrapping_add(1);
     if !(*dict).has_wrapped {
         (*dict).full = (*dict).pos.wrapping_sub(LZ_DICT_INIT_POS as size_t);
@@ -224,10 +224,10 @@ unsafe fn rc_read_init(
         if *in_pos == in_size {
             return LZMA_OK;
         }
-        if (*rc).init_bytes_left == 5 && *input.offset(*in_pos as isize) != 0 {
+        if (*rc).init_bytes_left == 5 && *input.add(*in_pos) != 0 {
             return LZMA_DATA_ERROR;
         }
-        (*rc).code = (*rc).code << 8 | *input.offset(*in_pos as isize) as u32;
+        (*rc).code = (*rc).code << 8 | *input.add(*in_pos) as u32;
         *in_pos = (*in_pos).wrapping_add(1);
         (*rc).init_bytes_left = (*rc).init_bytes_left.wrapping_sub(1);
     }
@@ -1608,8 +1608,8 @@ unsafe fn lzma_decode(
     let mut dict: lzma_dict = *dictptr;
     let dict_start: size_t = dict.pos;
     let mut rc: lzma_range_decoder = (*coder).rc;
-    let mut rc_in_ptr: *const u8 = input.offset(*in_pos as isize);
-    let rc_in_end: *const u8 = input.offset(in_size as isize);
+    let mut rc_in_ptr: *const u8 = input.add(*in_pos);
+    let rc_in_end: *const u8 = input.add(in_size);
     // LZMA_IN_REQUIRED from lzma_decoder.c. Decoding one symbol uses at most
     // 22 probability bits and 26 direct bits, which the range coder normalizes
     // out of no more than 20 input bytes. The fast path below reads and
@@ -2285,13 +2285,13 @@ unsafe fn lzma_decode(
                     *is_match_prob = (*is_match_prob as u32).wrapping_add(
                         RC_BIT_MODEL_TOTAL.wrapping_sub(*is_match_prob as u32) >> RC_MOVE_BITS,
                     ) as probability;
-                    probs = literal_probs.offset(
+                    probs = literal_probs.add(
                         (3_usize).wrapping_mul(
                             ((dict.pos << 8)
                                 .wrapping_add(dict_get0(::core::ptr::addr_of_mut!(dict)) as size_t)
                                 & literal_mask as size_t)
                                 << literal_context_bits,
-                        ) as isize,
+                        ),
                     );
                     symbol = 1;
                     if state < LIT_STATES {
@@ -2479,13 +2479,13 @@ unsafe fn lzma_decode(
                     *is_match_prob = (*is_match_prob as u32).wrapping_add(
                         RC_BIT_MODEL_TOTAL.wrapping_sub(*is_match_prob as u32) >> RC_MOVE_BITS,
                     ) as probability;
-                    probs = literal_probs.offset(
+                    probs = literal_probs.add(
                         (3_usize).wrapping_mul(
                             ((dict.pos << 8)
                                 .wrapping_add(dict_get0(::core::ptr::addr_of_mut!(dict)) as size_t)
                                 & literal_mask as size_t)
                                 << literal_context_bits,
-                        ) as isize,
+                        ),
                     );
                     if state < LIT_STATES {
                         state = if state <= STATE_SHORTREP_LIT_LIT {

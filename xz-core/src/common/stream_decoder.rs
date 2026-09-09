@@ -67,8 +67,8 @@ unsafe fn stream_decode(
                 }
                 (*coder).pos = 0;
                 let ret: lzma_ret = lzma_stream_header_decode(
-                    ::core::ptr::addr_of_mut!((*coder).stream_flags),
-                    ::core::ptr::addr_of_mut!((*coder).buffer) as *mut u8,
+                    &mut (*coder).stream_flags,
+                    (*coder).buffer.subarray::<0, STREAM_HEADER_SIZE>(),
                 );
                 if ret != LZMA_OK {
                     return if ret == LZMA_FORMAT_ERROR && !(*coder).first_stream {
@@ -98,12 +98,11 @@ unsafe fn stream_decode(
                     return LZMA_OK;
                 }
                 if (*coder).pos == 0 {
-                    if *input.offset(*in_pos as isize) == INDEX_INDICATOR {
+                    if *input.add(*in_pos) == INDEX_INDICATOR {
                         (*coder).sequence = SEQ_INDEX;
                         continue;
                     }
-                    (*coder).block_options.header_size =
-                        ((*input.offset(*in_pos as isize) as u32) + 1) * 4;
+                    (*coder).block_options.header_size = ((*input.add(*in_pos) as u32) + 1) * 4;
                 }
 
                 lzma_bufcpy(
@@ -128,9 +127,9 @@ unsafe fn stream_decode(
                 let filters_ptr = filters.as_mut_ptr() as *mut lzma_filter;
                 (*coder).block_options.filters = filters_ptr;
                 let ret: lzma_ret = lzma_block_header_decode(
-                    ::core::ptr::addr_of_mut!((*coder).block_options),
+                    &mut (*coder).block_options,
                     allocator,
-                    ::core::ptr::addr_of_mut!((*coder).buffer) as *mut u8,
+                    &(*coder).buffer,
                 );
                 if ret != LZMA_OK {
                     lzma_filters_free(filters_ptr, allocator);
@@ -222,8 +221,8 @@ unsafe fn stream_decode(
                 (*coder).pos = 0;
                 let mut footer_flags = MaybeUninit::<lzma_stream_flags>::zeroed();
                 let ret: lzma_ret = lzma_stream_footer_decode(
-                    footer_flags.as_mut_ptr(),
-                    ::core::ptr::addr_of_mut!((*coder).buffer) as *mut u8,
+                    footer_flags.assume_init_mut(),
+                    (*coder).buffer.subarray::<0, STREAM_HEADER_SIZE>(),
                 );
                 if ret != LZMA_OK {
                     return if ret == LZMA_FORMAT_ERROR {
@@ -232,14 +231,12 @@ unsafe fn stream_decode(
                         ret
                     };
                 }
-                let mut footer_flags = footer_flags.assume_init();
-                if lzma_index_hash_size((*coder).index_hash) != footer_flags.backward_size {
+                let footer_flags = footer_flags.assume_init();
+                if lzma_index_hash_size(&*(*coder).index_hash) != footer_flags.backward_size {
                     return LZMA_DATA_ERROR;
                 }
-                let ret: lzma_ret = lzma_stream_flags_compare(
-                    ::core::ptr::addr_of_mut!((*coder).stream_flags),
-                    ::core::ptr::addr_of_mut!(footer_flags),
-                );
+                let ret: lzma_ret =
+                    lzma_stream_flags_compare(&(*coder).stream_flags, &footer_flags);
                 if ret != LZMA_OK {
                     return ret;
                 }
@@ -261,7 +258,7 @@ unsafe fn stream_decode(
                             LZMA_DATA_ERROR
                         };
                     }
-                    if *input.offset(*in_pos as isize) != 0 {
+                    if *input.add(*in_pos) != 0 {
                         break;
                     }
                     *in_pos += 1;

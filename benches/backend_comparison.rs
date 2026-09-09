@@ -20,7 +20,6 @@ use liblzma_sys::{
 };
 #[cfg(feature = "xz-core")]
 use xz_core::{
-    check::{crc32_fast::lzma_crc32, crc64_fast::lzma_crc64},
     common::{
         easy_buffer_encoder::lzma_easy_buffer_encode,
         stream_buffer_decoder::lzma_stream_buffer_decode,
@@ -40,6 +39,18 @@ const BACKEND_NAME: &str = "xz-core";
 const BACKEND_NAME: &str = "liblzma-sys";
 #[cfg(feature = "xz-sys")]
 const BACKEND_NAME: &str = "xz-sys";
+
+/// xz-core takes the buffer as a slice; the other two backends take a pointer
+/// and a size. These keep one shape for the shared benches below.
+#[cfg(feature = "xz-core")]
+unsafe fn lzma_crc32(buf: *const u8, size: usize, crc: u32) -> u32 {
+    xz_core::check::crc32_fast::crc32(unsafe { core::slice::from_raw_parts(buf, size) }, crc)
+}
+
+#[cfg(feature = "xz-core")]
+unsafe fn lzma_crc64(buf: *const u8, size: usize, crc: u64) -> u64 {
+    xz_core::check::crc64_fast::crc64(unsafe { core::slice::from_raw_parts(buf, size) }, crc)
+}
 
 fn make_payload(size: usize) -> Vec<u8> {
     let mut x: u64 = 0x9E3779B97F4A7C15;

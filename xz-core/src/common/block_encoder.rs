@@ -59,7 +59,7 @@ unsafe fn block_encode(
                 lzma_check_update(
                     ::core::ptr::addr_of_mut!((*coder).check),
                     (*(*coder).block).check,
-                    input.offset(in_start as isize),
+                    input.add(in_start),
                     in_used,
                 );
             }
@@ -78,7 +78,7 @@ unsafe fn block_encode(
             if *out_pos >= out_size {
                 return LZMA_OK;
             }
-            *out.offset(*out_pos as isize) = 0;
+            *out.add(*out_pos) = 0;
             *out_pos += 1;
             (*coder).compressed_size += 1;
         }

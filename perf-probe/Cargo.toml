@@ -12,6 +12,7 @@ xz-sys = ["dep:xz-sys"]
 liblzma-sys = ["dep:liblzma-sys"]
 
 [dependencies]
+libc = "0.2"
 liblzma-sys = { version = "0.4.6", optional = true }
 xz-core = { path = "../xz-core", optional = true }
 xz-sys = { path = "../xz-sys", optional = true }

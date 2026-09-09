@@ -49,7 +49,7 @@ unsafe fn microlzma_encode(
         }
         return ret;
     }
-    *out.offset(out_start as isize) = !(*coder).props;
+    *out.add(out_start) = !(*coder).props;
     *in_pos = in_start + uncomp_size as size_t;
     ret
 }

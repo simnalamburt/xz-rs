@@ -63,14 +63,19 @@ pub struct mythread_condtime {
 
 #[cfg(all(unix, not(target_os = "emscripten")))]
 #[inline]
-pub fn mythread_sigmask(how: c_int, set: *const libc::sigset_t, oset: *mut libc::sigset_t) {
+pub unsafe fn mythread_sigmask(how: c_int, set: *const libc::sigset_t, oset: *mut libc::sigset_t) {
     let _ret: c_int = unsafe { libc::pthread_sigmask(how, set, oset) };
 }
 
 // Emscripten's libc has no pthread_sigmask(); signals barely exist there.
 #[cfg(all(unix, target_os = "emscripten"))]
 #[inline]
-pub fn mythread_sigmask(_how: c_int, _set: *const libc::sigset_t, _oset: *mut libc::sigset_t) {}
+pub unsafe fn mythread_sigmask(
+    _how: c_int,
+    _set: *const libc::sigset_t,
+    _oset: *mut libc::sigset_t,
+) {
+}
 
 #[cfg(windows)]
 struct mythread_start_info {
@@ -88,7 +93,7 @@ unsafe extern "system" fn mythread_start(param: *mut c_void) -> u32 {
 // Creates a new thread with all signals blocked.
 #[cfg(unix)]
 #[inline]
-pub fn mythread_create(
+pub unsafe fn mythread_create(
     thread: *mut mythread,
     func: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
     arg: *mut c_void,
@@ -118,7 +123,7 @@ pub fn mythread_create(
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_create(
+pub unsafe fn mythread_create(
     thread: *mut mythread,
     func: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
     arg: *mut c_void,
@@ -170,13 +175,13 @@ pub fn mythread_join(thread: mythread) -> c_int {
 
 #[cfg(unix)]
 #[inline]
-pub fn mythread_mutex_init(mutex: *mut mythread_mutex) -> c_int {
+pub unsafe fn mythread_mutex_init(mutex: *mut mythread_mutex) -> c_int {
     unsafe { libc::pthread_mutex_init(mutex, core::ptr::null()) }
 }
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_mutex_init(mutex: *mut mythread_mutex) -> c_int {
+pub unsafe fn mythread_mutex_init(mutex: *mut mythread_mutex) -> c_int {
     unsafe {
         InitializeCriticalSection(mutex);
     }
@@ -185,13 +190,13 @@ pub fn mythread_mutex_init(mutex: *mut mythread_mutex) -> c_int {
 
 #[cfg(unix)]
 #[inline]
-pub fn mythread_mutex_destroy(mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_mutex_destroy(mutex: *mut mythread_mutex) {
     let _ret: c_int = unsafe { libc::pthread_mutex_destroy(mutex) };
 }
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_mutex_destroy(mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_mutex_destroy(mutex: *mut mythread_mutex) {
     unsafe {
         DeleteCriticalSection(mutex);
     }
@@ -199,13 +204,13 @@ pub fn mythread_mutex_destroy(mutex: *mut mythread_mutex) {
 
 #[cfg(unix)]
 #[inline]
-pub fn mythread_mutex_lock(mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_mutex_lock(mutex: *mut mythread_mutex) {
     let _ret: c_int = unsafe { libc::pthread_mutex_lock(mutex) };
 }
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_mutex_lock(mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_mutex_lock(mutex: *mut mythread_mutex) {
     unsafe {
         EnterCriticalSection(mutex);
     }
@@ -213,13 +218,13 @@ pub fn mythread_mutex_lock(mutex: *mut mythread_mutex) {
 
 #[cfg(unix)]
 #[inline]
-pub fn mythread_mutex_unlock(mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_mutex_unlock(mutex: *mut mythread_mutex) {
     let _ret: c_int = unsafe { libc::pthread_mutex_unlock(mutex) };
 }
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_mutex_unlock(mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_mutex_unlock(mutex: *mut mythread_mutex) {
     unsafe {
         LeaveCriticalSection(mutex);
     }
@@ -234,7 +239,7 @@ pub fn mythread_mutex_unlock(mutex: *mut mythread_mutex) {
 // used if CLOCK_MONOTONIC isn't available.
 #[cfg(unix)]
 #[inline]
-pub fn mythread_cond_init(mycond: *mut mythread_cond) -> c_int {
+pub unsafe fn mythread_cond_init(mycond: *mut mythread_cond) -> c_int {
     unsafe {
         #[cfg(any(
             target_os = "linux",
@@ -283,7 +288,7 @@ pub fn mythread_cond_init(mycond: *mut mythread_cond) -> c_int {
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_cond_init(cond: *mut mythread_cond) -> c_int {
+pub unsafe fn mythread_cond_init(cond: *mut mythread_cond) -> c_int {
     unsafe {
         InitializeConditionVariable(cond);
     }
@@ -292,24 +297,24 @@ pub fn mythread_cond_init(cond: *mut mythread_cond) -> c_int {
 
 #[cfg(unix)]
 #[inline]
-pub fn mythread_cond_destroy(cond: *mut mythread_cond) {
+pub unsafe fn mythread_cond_destroy(cond: *mut mythread_cond) {
     let _ret: c_int =
         unsafe { libc::pthread_cond_destroy(::core::ptr::addr_of_mut!((*cond).cond)) };
 }
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_cond_destroy(_cond: *mut mythread_cond) {}
+pub unsafe fn mythread_cond_destroy(_cond: *mut mythread_cond) {}
 
 #[cfg(unix)]
 #[inline]
-pub fn mythread_cond_signal(cond: *mut mythread_cond) {
+pub unsafe fn mythread_cond_signal(cond: *mut mythread_cond) {
     let _ret: c_int = unsafe { libc::pthread_cond_signal(::core::ptr::addr_of_mut!((*cond).cond)) };
 }
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_cond_signal(cond: *mut mythread_cond) {
+pub unsafe fn mythread_cond_signal(cond: *mut mythread_cond) {
     unsafe {
         WakeConditionVariable(cond);
     }
@@ -317,14 +322,14 @@ pub fn mythread_cond_signal(cond: *mut mythread_cond) {
 
 #[cfg(unix)]
 #[inline]
-pub fn mythread_cond_wait(cond: *mut mythread_cond, mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_cond_wait(cond: *mut mythread_cond, mutex: *mut mythread_mutex) {
     let _ret: c_int =
         unsafe { libc::pthread_cond_wait(::core::ptr::addr_of_mut!((*cond).cond), mutex) };
 }
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_cond_wait(cond: *mut mythread_cond, mutex: *mut mythread_mutex) {
+pub unsafe fn mythread_cond_wait(cond: *mut mythread_cond, mutex: *mut mythread_mutex) {
     unsafe {
         let _ = SleepConditionVariableCS(cond, mutex, INFINITE);
     }
@@ -334,7 +339,7 @@ pub fn mythread_cond_wait(cond: *mut mythread_cond, mutex: *mut mythread_mutex) 
 // non-zero is returned, otherwise zero is returned.
 #[cfg(unix)]
 #[inline]
-pub fn mythread_cond_timedwait(
+pub unsafe fn mythread_cond_timedwait(
     cond: *mut mythread_cond,
     mutex: *mut mythread_mutex,
     condtime: *const mythread_condtime,
@@ -346,7 +351,7 @@ pub fn mythread_cond_timedwait(
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_cond_timedwait(
+pub unsafe fn mythread_cond_timedwait(
     cond: *mut mythread_cond,
     mutex: *mut mythread_mutex,
     condtime: *const mythread_condtime,
@@ -366,7 +371,7 @@ pub fn mythread_cond_timedwait(
 // in the future. The type of the clock to use is taken from cond.
 #[cfg(unix)]
 #[inline]
-pub fn mythread_condtime_set(
+pub unsafe fn mythread_condtime_set(
     condtime: *mut mythread_condtime,
     cond: *const mythread_cond,
     timeout_ms: u32,
@@ -398,7 +403,7 @@ pub fn mythread_condtime_set(
 
 #[cfg(windows)]
 #[inline]
-pub fn mythread_condtime_set(
+pub unsafe fn mythread_condtime_set(
     condtime: *mut mythread_condtime,
     _cond: *const mythread_cond,
     timeout_ms: u32,

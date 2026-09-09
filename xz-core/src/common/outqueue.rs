@@ -4,7 +4,7 @@ pub fn lzma_outq_memusage(buf_size_max: u64, threads: u32) -> u64 {
     if threads > LZMA_THREADS_MAX || buf_size_max > limit {
         return UINT64_MAX;
     }
-    (2u32 * threads) as u64 * lzma_outq_outbuf_memusage(buf_size_max as size_t)
+    (2u32 * threads) as u64 * lzma_outq_outbuf_memusage(buf_size_max)
 }
 unsafe fn move_head_to_cache(outq: *mut lzma_outq, allocator: *const lzma_allocator) {
     let buf: *mut lzma_outbuf = (*outq).head;
@@ -18,16 +18,16 @@ unsafe fn move_head_to_cache(outq: *mut lzma_outq, allocator: *const lzma_alloca
     (*buf).next = (*outq).cache;
     (*outq).cache = buf;
     (*outq).bufs_in_use -= 1;
-    (*outq).mem_in_use -= lzma_outq_outbuf_memusage((*buf).allocated);
+    (*outq).mem_in_use -= lzma_outq_outbuf_memusage((*buf).allocated as u64);
 }
 unsafe fn free_one_cached_buffer(outq: *mut lzma_outq, allocator: *const lzma_allocator) {
     let buf: *mut lzma_outbuf = (*outq).cache;
     (*outq).cache = (*buf).next;
     (*outq).bufs_allocated -= 1;
-    (*outq).mem_allocated -= lzma_outq_outbuf_memusage((*buf).allocated);
+    (*outq).mem_allocated -= lzma_outq_outbuf_memusage((*buf).allocated as u64);
     crate::alloc::internal_free_array(
         buf as *mut u8,
-        lzma_outq_outbuf_memusage((*buf).allocated) as size_t,
+        lzma_outq_outbuf_memusage((*buf).allocated as u64) as size_t,
         allocator,
     );
 }
@@ -87,7 +87,7 @@ pub unsafe fn lzma_outq_prealloc_buf(
     if size > (SIZE_MAX as usize) - core::mem::size_of::<lzma_outbuf>() {
         return LZMA_MEM_ERROR;
     }
-    let alloc_size: size_t = lzma_outq_outbuf_memusage(size) as size_t;
+    let alloc_size: size_t = lzma_outq_outbuf_memusage(size as u64) as size_t;
     lzma_outq_clear_cache(outq, allocator);
     (*outq).cache =
         crate::alloc::internal_alloc_array::<u8>(alloc_size, allocator) as *mut lzma_outbuf;
@@ -118,7 +118,7 @@ pub unsafe fn lzma_outq_get_buf(outq: *mut lzma_outq, worker: *mut c_void) -> *m
     (*buf).unpadded_size = 0;
     (*buf).uncompressed_size = 0;
     (*outq).bufs_in_use += 1;
-    (*outq).mem_in_use += lzma_outq_outbuf_memusage((*buf).allocated);
+    (*outq).mem_in_use += lzma_outq_outbuf_memusage((*buf).allocated as u64);
     buf
 }
 pub unsafe fn lzma_outq_is_readable(outq: *const lzma_outq) -> bool {

@@ -70,7 +70,7 @@ pub struct lzma_options_lzma {
     pub reserved_ptr1: *mut c_void,
     pub reserved_ptr2: *mut c_void,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct lzma_stream {
     pub next_in: *const u8,
@@ -160,6 +160,9 @@ pub const LZMA_CONCATENATED: c_uint = 0x8;
 pub const LZMA_IGNORE_CHECK: c_uint = 0x10;
 pub const LZMA_FAIL_FAST: c_uint = 0x20;
 pub const LZMA_STREAM_HEADER_SIZE: u32 = 12;
+/// [`LZMA_STREAM_HEADER_SIZE`] as a `usize`, for use as a const generic
+/// argument.
+pub const STREAM_HEADER_SIZE: usize = LZMA_STREAM_HEADER_SIZE as usize;
 pub const LZMA_BLOCK_HEADER_SIZE_MAX: u32 = 1024;
 pub const LZMA_DICT_SIZE_MIN: c_uint = 4096;
 pub const STATE_LIT_LIT: lzma_lzma_state = 0;
@@ -576,6 +579,30 @@ pub struct lzma_lzma1_encoder_s {
     pub opts: [lzma_optimal; OPTS as usize],
 }
 pub type lzma_lzma1_encoder = lzma_lzma1_encoder_s;
+/// Fixed-size windows into a fixed-size buffer at compile-time offsets.
+///
+/// `OFF + M <= N` is proved when the method is instantiated, so the access has
+/// no bound check and no panic path: the cast is discharged by the const
+/// assertion rather than by a runtime test. `N` comes from the receiver, so a
+/// caller names only the offset and the length.
+pub trait FixedBuf<const N: usize> {
+    fn subarray<const OFF: usize, const M: usize>(&self) -> &[u8; M];
+    fn subarray_mut<const OFF: usize, const M: usize>(&mut self) -> &mut [u8; M];
+}
+
+impl<const N: usize> FixedBuf<N> for [u8; N] {
+    #[inline]
+    fn subarray<const OFF: usize, const M: usize>(&self) -> &[u8; M] {
+        const { assert!(OFF + M <= N) };
+        unsafe { &*self.as_ptr().add(OFF).cast::<[u8; M]>() }
+    }
+    #[inline]
+    fn subarray_mut<const OFF: usize, const M: usize>(&mut self) -> &mut [u8; M] {
+        const { assert!(OFF + M <= N) };
+        unsafe { &mut *self.as_mut_ptr().add(OFF).cast::<[u8; M]>() }
+    }
+}
+
 #[inline]
 pub fn read32le(buf: &[u8; 4]) -> u32 {
     u32::from_le_bytes(*buf)
@@ -595,12 +622,12 @@ pub fn index_size_unpadded(count: lzma_vli, index_list_size: lzma_vli) -> lzma_v
         .wrapping_add(4)
 }
 #[inline]
-pub fn lzma_outq_has_buf(outq: *const lzma_outq) -> bool {
-    unsafe { (*outq).bufs_in_use < (*outq).bufs_limit }
+pub fn lzma_outq_has_buf(outq: &lzma_outq) -> bool {
+    outq.bufs_in_use < outq.bufs_limit
 }
 #[inline]
-pub fn lzma_outq_is_empty(outq: *const lzma_outq) -> bool {
-    unsafe { (*outq).bufs_in_use == 0 }
+pub fn lzma_outq_is_empty(outq: &lzma_outq) -> bool {
+    outq.bufs_in_use == 0
 }
 #[inline]
 pub unsafe fn mf_ptr(mf: *const lzma_mf) -> *const u8 {
@@ -891,23 +918,59 @@ pub unsafe fn literal_init(probs: *mut probability, lc: u32, lp: u32) {
     let coders: size_t = (LITERAL_CODER_SIZE << lc.wrapping_add(lp)) as size_t;
     let mut i: size_t = 0;
     while i < coders {
-        *probs.offset(i as isize) = (RC_BIT_MODEL_TOTAL >> 1) as probability;
+        *probs.add(i) = (RC_BIT_MODEL_TOTAL >> 1) as probability;
         i += 1;
     }
 }
-pub fn is_backward_size_valid(options: *const lzma_stream_flags) -> bool {
-    unsafe {
-        (*options).backward_size >= LZMA_BACKWARD_SIZE_MIN as lzma_vli
-            && (*options).backward_size <= LZMA_BACKWARD_SIZE_MAX
-            && (*options).backward_size & 3 == 0
-    }
+pub fn is_backward_size_valid(options: &lzma_stream_flags) -> bool {
+    options.backward_size >= LZMA_BACKWARD_SIZE_MIN as lzma_vli
+        && options.backward_size <= LZMA_BACKWARD_SIZE_MAX
+        && options.backward_size & 3 == 0
 }
 #[inline]
 pub fn index_size(count: lzma_vli, index_list_size: lzma_vli) -> lzma_vli {
     vli_ceil4(index_size_unpadded(count, index_list_size))
 }
-pub fn lzma_outq_outbuf_memusage(buf_size: size_t) -> u64 {
-    (core::mem::size_of::<lzma_outbuf>()).wrapping_add(buf_size as usize) as u64
+/// Borrow a C buffer as a slice.
+///
+/// The transpiled coder interface passes a pointer and a size, and allows the
+/// pointer to be NULL as long as the size is zero. `from_raw_parts` requires a
+/// non-null, aligned pointer even for an empty slice, so the zero case gets an
+/// empty slice of its own.
+///
+/// # Safety
+/// `ptr` must be readable for `len` bytes, or `len` must be zero.
+#[inline]
+pub(crate) unsafe fn c_slice<'a>(ptr: *const u8, len: size_t) -> &'a [u8] {
+    if len == 0 {
+        &[]
+    } else {
+        core::slice::from_raw_parts(ptr, len)
+    }
+}
+
+/// Mutable form of [`c_slice`].
+///
+/// # Safety
+/// `ptr` must be writable for `len` bytes, or `len` must be zero.
+#[inline]
+pub(crate) unsafe fn c_slice_mut<'a>(ptr: *mut u8, len: size_t) -> &'a mut [u8] {
+    if len == 0 {
+        &mut []
+    } else {
+        core::slice::from_raw_parts_mut(ptr, len)
+    }
+}
+
+/// Memory one output buffer of `buf_size` bytes costs, header included.
+///
+/// The argument is 64-bit because callers reach this both with a size_t from a
+/// buffer that was allocated and with an lzma_vli from caller options or a
+/// Block header. C takes a size_t for both, so on a 32-bit target the second
+/// kind truncates to a few hundred bytes, turning a memlimit rejection into an
+/// accept.
+pub(crate) fn lzma_outq_outbuf_memusage(buf_size: u64) -> u64 {
+    (core::mem::size_of::<lzma_outbuf>() as u64).saturating_add(buf_size)
 }
 #[inline]
 pub unsafe fn aligned_read32ne(buf: *const u8) -> u32 {
@@ -1017,7 +1080,9 @@ pub(crate) struct lzma_simple_coder {
 pub use crate::check::check::{
     lzma_check_finish, lzma_check_init, lzma_check_is_supported, lzma_check_size, lzma_check_update,
 };
-pub use crate::check::crc32_fast::lzma_crc32;
+pub use crate::check::crc32_fast::crc32;
+pub(crate) use crate::check::crc32_fast::lzma_crc32;
+pub use crate::check::crc64_fast::crc64;
 pub(crate) use crate::common::block_decoder::lzma_block_decoder_init;
 pub(crate) use crate::common::block_encoder::lzma_block_encoder_init;
 pub use crate::common::block_header_decoder::lzma_block_header_decode;
