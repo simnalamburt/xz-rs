@@ -192,7 +192,7 @@ pub(crate) unsafe fn lzma_index_encoder_init(
     index_encoder_reset((*next).coder as *mut lzma_index_coder, i);
     LZMA_OK
 }
-pub unsafe fn lzma_index_encoder(strm: *mut lzma_stream, i: *const lzma_index) -> lzma_ret {
+pub unsafe fn lzma_index_encoder(strm: &mut lzma_stream, i: *const lzma_index) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
     if ret != LZMA_OK {
         return ret;

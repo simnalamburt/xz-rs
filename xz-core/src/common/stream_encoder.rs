@@ -404,7 +404,7 @@ unsafe fn stream_encoder_init(
     stream_encoder_update(coder as *mut c_void, allocator, filters, core::ptr::null())
 }
 pub unsafe fn lzma_stream_encoder(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     filters: *const lzma_filter,
     check: lzma_check,
 ) -> lzma_ret {

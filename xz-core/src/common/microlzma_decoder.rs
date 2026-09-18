@@ -239,7 +239,7 @@ unsafe fn microlzma_decoder_init(
     LZMA_OK
 }
 pub unsafe fn lzma_microlzma_decoder(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     comp_size: u64,
     uncomp_size: u64,
     uncomp_size_is_exact: lzma_bool,

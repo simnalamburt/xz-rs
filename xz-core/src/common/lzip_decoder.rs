@@ -360,7 +360,7 @@ pub(crate) unsafe fn lzma_lzip_decoder_init(
     (*coder).pos = 0;
     LZMA_OK
 }
-pub unsafe fn lzma_lzip_decoder(strm: *mut lzma_stream, memlimit: u64, flags: u32) -> lzma_ret {
+pub unsafe fn lzma_lzip_decoder(strm: &mut lzma_stream, memlimit: u64, flags: u32) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;

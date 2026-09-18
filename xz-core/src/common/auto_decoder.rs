@@ -112,7 +112,7 @@ unsafe fn auto_decoder_get_check(coder_ptr: *const c_void) -> lzma_check {
         None => LZMA_CHECK_NONE,
     }
 }
-pub unsafe fn lzma_auto_decoder(strm: *mut lzma_stream, memlimit: u64, flags: u32) -> lzma_ret {
+pub unsafe fn lzma_auto_decoder(strm: &mut lzma_stream, memlimit: u64, flags: u32) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
     if ret != LZMA_OK {
         return ret;

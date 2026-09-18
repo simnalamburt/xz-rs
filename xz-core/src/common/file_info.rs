@@ -589,7 +589,7 @@ unsafe fn lzma_file_info_decoder_init(
     LZMA_OK
 }
 pub unsafe fn lzma_file_info_decoder(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     dest_index: *mut *mut lzma_index,
     memlimit: u64,
     file_size: u64,

@@ -285,7 +285,7 @@ unsafe fn coder_find(id: lzma_vli) -> *const lzma_filter_coder {
 pub fn lzma_filter_encoder_is_supported(id: lzma_vli) -> lzma_bool {
     !encoder_find(id).is_null() as lzma_bool
 }
-pub unsafe fn lzma_filters_update(strm: *mut lzma_stream, filters: *const lzma_filter) -> lzma_ret {
+pub unsafe fn lzma_filters_update(strm: &mut lzma_stream, filters: *const lzma_filter) -> lzma_ret {
     if (*(*strm).internal).next.update.is_none() {
         return LZMA_PROG_ERROR;
     }
@@ -332,7 +332,7 @@ pub unsafe fn lzma_raw_encoder_init(
         true,
     )
 }
-pub unsafe fn lzma_raw_encoder(strm: *mut lzma_stream, filters: *const lzma_filter) -> lzma_ret {
+pub unsafe fn lzma_raw_encoder(strm: &mut lzma_stream, filters: *const lzma_filter) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
     if ret != LZMA_OK {
         return ret;

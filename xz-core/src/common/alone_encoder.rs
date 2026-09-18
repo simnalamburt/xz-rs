@@ -201,7 +201,7 @@ unsafe fn alone_encoder_init(
     )
 }
 pub unsafe fn lzma_alone_encoder(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     options: *const lzma_options_lzma,
 ) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);

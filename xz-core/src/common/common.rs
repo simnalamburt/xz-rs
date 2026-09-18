@@ -18,10 +18,10 @@ pub fn lzma_version_string() -> *const c_char {
     crate::c_str!("5.8.3")
 }
 #[inline]
-pub unsafe fn lzma_stream_allocator(strm: *const lzma_stream) -> *const lzma_allocator {
+pub fn lzma_stream_allocator(strm: &lzma_stream) -> *const lzma_allocator {
     #[cfg(feature = "custom_allocator")]
     {
-        unsafe { (*strm).allocator }
+        strm.allocator
     }
     #[cfg(not(feature = "custom_allocator"))]
     {
@@ -129,10 +129,7 @@ pub unsafe fn lzma_next_end(next: *mut lzma_next_coder, allocator: *const lzma_a
         set_out_limit: None,
     };
 }
-pub unsafe fn lzma_strm_init(strm: *mut lzma_stream) -> lzma_ret {
-    if strm.is_null() {
-        return LZMA_PROG_ERROR;
-    }
+pub unsafe fn lzma_strm_init(strm: &mut lzma_stream) -> lzma_ret {
     if (*strm).internal.is_null() {
         (*strm).internal = lzma_alloc_object::<lzma_internal>(lzma_stream_allocator(strm));
         if (*strm).internal.is_null() {
@@ -163,7 +160,7 @@ pub unsafe fn lzma_strm_init(strm: *mut lzma_stream) -> lzma_ret {
     (*strm).total_out = 0;
     LZMA_OK
 }
-pub unsafe fn lzma_code(strm: *mut lzma_stream, action: lzma_action) -> lzma_ret {
+pub unsafe fn lzma_code(strm: &mut lzma_stream, action: lzma_action) -> lzma_ret {
     if (*strm).next_in.is_null() && (*strm).avail_in != 0
         || (*strm).next_out.is_null() && (*strm).avail_out != 0
         || (*strm).internal.is_null()
@@ -292,8 +289,8 @@ pub unsafe fn lzma_code(strm: *mut lzma_stream, action: lzma_action) -> lzma_ret
     }
     ret
 }
-pub unsafe fn lzma_end(strm: *mut lzma_stream) {
-    if !strm.is_null() && !(*strm).internal.is_null() {
+pub unsafe fn lzma_end(strm: &mut lzma_stream) {
+    if !(*strm).internal.is_null() {
         lzma_next_end(
             ::core::ptr::addr_of_mut!((*(*strm).internal).next),
             lzma_stream_allocator(strm),
@@ -303,14 +300,14 @@ pub unsafe fn lzma_end(strm: *mut lzma_stream) {
     }
 }
 /// # Safety
-/// `strm` may be NULL or zeroed, but if `internal` is set it must be the
-/// coder `lzma_strm_init` installed.
+/// `strm` may be zeroed, but if `internal` is set it must be the coder
+/// `lzma_strm_init` installed.
 pub unsafe fn lzma_get_progress(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     progress_in: &mut u64,
     progress_out: &mut u64,
 ) {
-    if strm.is_null() || (*strm).internal.is_null() {
+    if (*strm).internal.is_null() {
         *progress_in = 0;
         *progress_out = 0;
         return;
@@ -323,9 +320,9 @@ pub unsafe fn lzma_get_progress(
         *progress_out = (*strm).total_out;
     };
 }
-pub unsafe fn lzma_get_check(strm: *const lzma_stream) -> lzma_check {
+pub unsafe fn lzma_get_check(strm: &lzma_stream) -> lzma_check {
     unsafe {
-        if strm.is_null() || (*strm).internal.is_null() {
+        if (*strm).internal.is_null() {
             return LZMA_CHECK_NONE;
         }
         if let Some(get_check) = (*(*strm).internal).next.get_check {
@@ -335,11 +332,11 @@ pub unsafe fn lzma_get_check(strm: *const lzma_stream) -> lzma_check {
         }
     }
 }
-pub unsafe fn lzma_memusage(strm: *const lzma_stream) -> u64 {
+pub unsafe fn lzma_memusage(strm: &lzma_stream) -> u64 {
     unsafe {
         let mut memusage: u64 = 0;
         let mut old_memlimit: u64 = 0;
-        if strm.is_null() || (*strm).internal.is_null() {
+        if (*strm).internal.is_null() {
             return 0;
         }
         let Some(memconfig) = (*(*strm).internal).next.memconfig else {
@@ -357,11 +354,11 @@ pub unsafe fn lzma_memusage(strm: *const lzma_stream) -> u64 {
         memusage
     }
 }
-pub unsafe fn lzma_memlimit_get(strm: *const lzma_stream) -> u64 {
+pub unsafe fn lzma_memlimit_get(strm: &lzma_stream) -> u64 {
     unsafe {
         let mut old_memlimit: u64 = 0;
         let mut memusage: u64 = 0;
-        if strm.is_null() || (*strm).internal.is_null() {
+        if (*strm).internal.is_null() {
             return 0;
         }
         let Some(memconfig) = (*(*strm).internal).next.memconfig else {
@@ -379,10 +376,10 @@ pub unsafe fn lzma_memlimit_get(strm: *const lzma_stream) -> u64 {
         old_memlimit
     }
 }
-pub unsafe fn lzma_memlimit_set(strm: *mut lzma_stream, mut new_memlimit: u64) -> lzma_ret {
+pub unsafe fn lzma_memlimit_set(strm: &mut lzma_stream, mut new_memlimit: u64) -> lzma_ret {
     let mut old_memlimit: u64 = 0;
     let mut memusage: u64 = 0;
-    if strm.is_null() || (*strm).internal.is_null() {
+    if (*strm).internal.is_null() {
         return LZMA_PROG_ERROR;
     }
     let Some(memconfig) = (*(*strm).internal).next.memconfig else {

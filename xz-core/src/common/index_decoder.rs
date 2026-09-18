@@ -327,7 +327,7 @@ pub(crate) unsafe fn lzma_index_decoder_init(
     index_decoder_reset(coder, allocator, i, memlimit)
 }
 pub unsafe fn lzma_index_decoder(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     i: *mut *mut lzma_index,
     memlimit: u64,
 ) -> lzma_ret {

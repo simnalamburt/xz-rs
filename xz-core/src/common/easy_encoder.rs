@@ -2,7 +2,7 @@ use crate::common::stream_encoder::lzma_stream_encoder;
 use crate::types::*;
 use core::mem::MaybeUninit;
 pub unsafe fn lzma_easy_encoder(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     preset: u32,
     check: lzma_check,
 ) -> lzma_ret {

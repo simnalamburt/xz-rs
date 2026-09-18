@@ -307,7 +307,7 @@ pub unsafe fn lzma_raw_decoder_init(
         false,
     )
 }
-pub unsafe fn lzma_raw_decoder(strm: *mut lzma_stream, options: *const lzma_filter) -> lzma_ret {
+pub unsafe fn lzma_raw_decoder(strm: &mut lzma_stream, options: *const lzma_filter) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;

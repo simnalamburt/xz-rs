@@ -1573,7 +1573,7 @@ unsafe fn stream_decoder_mt_init(
     }
     stream_decoder_reset(coder, allocator)
 }
-pub unsafe fn lzma_stream_decoder_mt(strm: *mut lzma_stream, options: *const lzma_mt) -> lzma_ret {
+pub unsafe fn lzma_stream_decoder_mt(strm: &mut lzma_stream, options: *const lzma_mt) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;

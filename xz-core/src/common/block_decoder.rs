@@ -255,7 +255,7 @@ pub(crate) unsafe fn lzma_block_decoder_init(
         (*block).filters,
     )
 }
-pub unsafe fn lzma_block_decoder(strm: *mut lzma_stream, block: *mut lzma_block) -> lzma_ret {
+pub unsafe fn lzma_block_decoder(strm: &mut lzma_stream, block: *mut lzma_block) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;
