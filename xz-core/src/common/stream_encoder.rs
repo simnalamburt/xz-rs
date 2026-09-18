@@ -174,7 +174,7 @@ unsafe fn stream_encode(
                 // the encoder never reads. LZMA_RESERVED_ENUM is 0.
                 let mut stream_flags = MaybeUninit::<lzma_stream_flags>::zeroed().assume_init();
                 stream_flags.version = 0;
-                stream_flags.backward_size = lzma_index_size(&*(*coder).index);
+                stream_flags.backward_size = lzma_index_size(c_ref((*coder).index));
                 stream_flags.check = (*coder).block_options.check;
                 if lzma_stream_footer_encode(
                     &stream_flags,

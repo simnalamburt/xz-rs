@@ -1115,10 +1115,5 @@ pub fn crc64(buf: &[u8], crc: u64) -> u64 {
 /// # Safety
 /// `buf` must be readable for `size` bytes, or `size` must be zero.
 pub(crate) unsafe fn lzma_crc64(buf: *const u8, size: size_t, crc: u64) -> u64 {
-    let buf = if size == 0 {
-        &[][..]
-    } else {
-        core::slice::from_raw_parts(buf, size)
-    };
-    crc64(buf, crc)
+    crc64(crate::types::c_slice(buf, size), crc)
 }

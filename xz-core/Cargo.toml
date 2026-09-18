@@ -8,6 +8,8 @@ description = "Pure Rust implementation of liblzma (transpiled from C via c2rust
 [features]
 default = []
 custom_allocator = []
+# NULL pointers turned into references panic instead of being undefined.
+extra-safety = []
 
 [dependencies]
 libc = "0.2"

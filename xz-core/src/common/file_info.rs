@@ -259,7 +259,7 @@ unsafe fn file_info_decode(
             SEQ_INDEX_INIT => {
                 let mut memused: u64 = 0;
                 if !(*coder).combined_index.is_null() {
-                    memused = lzma_index_memused(&*(*coder).combined_index);
+                    memused = lzma_index_memused(c_ref((*coder).combined_index));
                     if memused > (*coder).memlimit {
                         return LZMA_PROG_ERROR;
                     }
@@ -307,7 +307,7 @@ unsafe fn file_info_decode(
                     }
                     _ => return ret,
                 }
-                let seek_amount: u64 = lzma_index_total_size(&*(*coder).this_index) as u64
+                let seek_amount: u64 = lzma_index_total_size(c_ref((*coder).this_index)) as u64
                     + LZMA_STREAM_HEADER_SIZE as u64;
                 if (*coder).file_target_pos < seek_amount {
                     return LZMA_DATA_ERROR;
@@ -414,10 +414,10 @@ unsafe fn file_info_decoder_memconfig(
     let mut combined_index_memusage: u64 = 0;
     let mut this_index_memusage: u64 = 0;
     if !(*coder).combined_index.is_null() {
-        combined_index_memusage = lzma_index_memused(&*(*coder).combined_index);
+        combined_index_memusage = lzma_index_memused(c_ref((*coder).combined_index));
     }
     if !(*coder).this_index.is_null() {
-        this_index_memusage = lzma_index_memused(&*(*coder).this_index);
+        this_index_memusage = lzma_index_memused(c_ref((*coder).this_index));
     } else if (*coder).sequence == SEQ_INDEX_DECODE {
         let mut dummy: u64 = 0;
         let Some(memconfig) = (*coder).index_decoder.memconfig else {

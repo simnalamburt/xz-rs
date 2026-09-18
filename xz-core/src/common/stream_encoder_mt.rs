@@ -852,7 +852,7 @@ unsafe fn stream_encode_mt_blocks(
     }
     (*coder).sequence = SEQ_INDEX;
     (*coder).progress_out +=
-        (lzma_index_size(&*(*coder).index) + LZMA_STREAM_HEADER_SIZE as lzma_vli) as u64;
+        (lzma_index_size(c_ref((*coder).index)) + LZMA_STREAM_HEADER_SIZE as lzma_vli) as u64;
     LZMA_STREAM_END
 }
 
@@ -881,7 +881,7 @@ unsafe fn stream_encode_mt_index(
     if ret != LZMA_STREAM_END {
         return ret;
     }
-    (*coder).stream_flags.backward_size = lzma_index_size(&*(*coder).index);
+    (*coder).stream_flags.backward_size = lzma_index_size(c_ref((*coder).index));
     if lzma_stream_footer_encode(&(*coder).stream_flags, &mut (*coder).header) != LZMA_OK {
         return LZMA_PROG_ERROR;
     }
@@ -1030,7 +1030,7 @@ unsafe fn get_options(
     if !(*options).filters.is_null() {
         *filters = (*options).filters;
     } else {
-        if lzma_easy_preset(&mut *opt_easy, (*options).preset) {
+        if lzma_easy_preset(c_mut(opt_easy), (*options).preset) {
             return LZMA_OPTIONS_ERROR;
         }
         *filters = ::core::ptr::addr_of_mut!((*opt_easy).filters) as *mut lzma_filter;

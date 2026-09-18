@@ -20,7 +20,7 @@ uncheck_liblzma_version = [] # ignored: no system liblzma to version-check
 # These features have actual effects:
 parallel = []
 # NULL pointers the C API never checks panic instead of being undefined.
-extra-safety = []
+extra-safety = ["xz-core/extra-safety"]
 wasm = ["static", "bindgen"]
 
 [dependencies]

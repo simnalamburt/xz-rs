@@ -132,7 +132,10 @@ fn xz_sys_keeps_liblzma_sys_compatible_features() {
     let expected = BTreeMap::from([
         ("bindgen".to_string(), Vec::new()),
         ("default".to_string(), vec!["bindgen".to_string()]),
-        ("extra-safety".to_string(), Vec::new()),
+        (
+            "extra-safety".to_string(),
+            vec!["xz-core/extra-safety".to_string()],
+        ),
         ("fat-lto".to_string(), Vec::new()),
         ("parallel".to_string(), Vec::new()),
         ("static".to_string(), Vec::new()),

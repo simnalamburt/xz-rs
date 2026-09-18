@@ -417,7 +417,7 @@ pub unsafe fn lzma_index_stream_flags(
     if i.is_null() || stream_flags.is_null() {
         return LZMA_PROG_ERROR;
     }
-    let ret: lzma_ret = lzma_stream_flags_compare(&*stream_flags, &*stream_flags);
+    let ret: lzma_ret = lzma_stream_flags_compare(c_ref(stream_flags), c_ref(stream_flags));
     if ret != LZMA_OK {
         return ret;
     }
@@ -432,7 +432,7 @@ pub unsafe fn lzma_index_stream_padding(i: *mut lzma_index, stream_padding: lzma
     let s: *mut index_stream = (*i).streams.rightmost as *mut index_stream;
     let old_stream_padding: lzma_vli = (*s).stream_padding;
     (*s).stream_padding = 0;
-    if lzma_index_file_size(&*i).wrapping_add(stream_padding) > LZMA_VLI_MAX {
+    if lzma_index_file_size(c_ref(i)).wrapping_add(stream_padding) > LZMA_VLI_MAX {
         (*s).stream_padding = old_stream_padding;
         return LZMA_DATA_ERROR;
     }
@@ -538,7 +538,7 @@ mod tests {
             let index = lzma_index_init(allocator);
             assert!(!index.is_null());
 
-            lzma_index_prealloc(&mut *index, 0);
+            lzma_index_prealloc(c_mut(index), 0);
             assert_eq!((*index).prealloc, INDEX_GROUP_SIZE as size_t);
 
             let ret = lzma_index_append(index, allocator, UNPADDED_SIZE_MIN, 0);
@@ -571,8 +571,8 @@ pub unsafe fn lzma_index_cat(
     if dest.is_null() || src.is_null() {
         return LZMA_PROG_ERROR;
     }
-    let dest_file_size: lzma_vli = lzma_index_file_size(&*dest);
-    if dest_file_size.wrapping_add(lzma_index_file_size(&*src)) > LZMA_VLI_MAX
+    let dest_file_size: lzma_vli = lzma_index_file_size(c_ref(dest));
+    if dest_file_size.wrapping_add(lzma_index_file_size(c_ref(src))) > LZMA_VLI_MAX
         || (*dest)
             .uncompressed_size
             .wrapping_add((*src).uncompressed_size)
@@ -613,7 +613,7 @@ pub unsafe fn lzma_index_cat(
         (*s).groups.rightmost = ::core::ptr::addr_of_mut!((*newg).node);
         index_group_free(g, allocator);
     }
-    (*dest).checks = lzma_index_checks(&*dest);
+    (*dest).checks = lzma_index_checks(c_ref(dest));
     let info: index_cat_info = index_cat_info {
         uncompressed_size: (*dest).uncompressed_size,
         file_size: dest_file_size,

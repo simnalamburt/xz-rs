@@ -128,7 +128,7 @@ pub unsafe fn lzma_stream_buffer_encode(
     }
     if ret == LZMA_OK {
         ret = lzma_index_buffer_encode(i, out, ::core::ptr::addr_of_mut!(out_pos), out_size);
-        stream_flags.backward_size = lzma_index_size(&*i);
+        stream_flags.backward_size = lzma_index_size(c_ref(i));
     }
     lzma_index_end(i, allocator);
     if ret != LZMA_OK {

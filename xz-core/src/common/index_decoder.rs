@@ -56,7 +56,7 @@ unsafe fn index_decode(
                         &mut (*coder).count,
                         Some(&mut (*coder).pos),
                         c_slice(input, in_size),
-                        &mut *in_pos,
+                        c_mut(in_pos),
                     );
                     if ret != LZMA_STREAM_END {
                         return goto_out(coder, input, in_start, in_pos, ret);
@@ -73,7 +73,7 @@ unsafe fn index_decode(
                         return goto_out(coder, input, in_start, in_pos, ret);
                     }
 
-                    lzma_index_prealloc(&mut *(*coder).index, (*coder).count);
+                    lzma_index_prealloc(c_mut((*coder).index), (*coder).count);
                     ret = LZMA_OK;
                     (*coder).sequence = if (*coder).count == 0 {
                         SEQ_PADDING_INIT
@@ -94,7 +94,7 @@ unsafe fn index_decode(
                         size,
                         Some(&mut (*coder).pos),
                         c_slice(input, in_size),
-                        &mut *in_pos,
+                        c_mut(in_pos),
                     );
                     if ret != LZMA_STREAM_END {
                         return goto_out(coder, input, in_start, in_pos, ret);
@@ -134,7 +134,7 @@ unsafe fn index_decode(
                 }
 
                 SEQ_PADDING_INIT => {
-                    (*coder).pos = lzma_index_padding_size(&*(*coder).index) as size_t;
+                    (*coder).pos = lzma_index_padding_size(c_ref((*coder).index)) as size_t;
                     (*coder).sequence = SEQ_PADDING;
                     continue;
                 }

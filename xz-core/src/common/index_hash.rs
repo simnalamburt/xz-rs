@@ -162,7 +162,7 @@ pub unsafe fn lzma_index_hash_decode(
                     &mut (*index_hash).remaining,
                     Some(&mut (*index_hash).pos),
                     c_slice(input, in_size),
-                    &mut *in_pos,
+                    c_mut(in_pos),
                 );
                 if ret != LZMA_STREAM_END {
                     break;
@@ -189,7 +189,7 @@ pub unsafe fn lzma_index_hash_decode(
                     size,
                     Some(&mut (*index_hash).pos),
                     c_slice(input, in_size),
-                    &mut *in_pos,
+                    c_mut(in_pos),
                 );
                 if ret != LZMA_STREAM_END {
                     break;

@@ -251,7 +251,7 @@ unsafe fn set_lzma12_preset(
         return errmsg;
     }
     let opts: *mut lzma_options_lzma = filter_options as *mut lzma_options_lzma;
-    if lzma_lzma_preset(&mut *opts, preset) != 0 {
+    if lzma_lzma_preset(c_mut(opts), preset) != 0 {
         return crate::c_str!("Unsupported preset");
     }
     core::ptr::null()
@@ -400,7 +400,7 @@ unsafe fn parse_lzma12(
     filter_options: *mut c_void,
 ) -> *const c_char {
     let opts: *mut lzma_options_lzma = filter_options as *mut lzma_options_lzma;
-    let _preset_ret: bool = lzma_lzma_preset(&mut *opts, LZMA_PRESET_DEFAULT as u32) != 0;
+    let _preset_ret: bool = lzma_lzma_preset(c_mut(opts), LZMA_PRESET_DEFAULT as u32) != 0;
     let errmsg: *const c_char = parse_options(
         str,
         str_end,
@@ -834,7 +834,7 @@ unsafe fn str_to_filters(
         if opts.is_null() {
             return crate::c_str!("Memory allocation failed");
         }
-        if lzma_lzma_preset(&mut *opts, preset) != 0 {
+        if lzma_lzma_preset(c_mut(opts), preset) != 0 {
             crate::alloc::internal_free(opts, allocator);
             return crate::c_str!("Unsupported preset");
         }

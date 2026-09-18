@@ -31,7 +31,7 @@ pub unsafe fn lzma_block_header_size(block: &mut lzma_block) -> lzma_ret {
             return LZMA_PROG_ERROR;
         }
         let mut add_1: u32 = 0;
-        let ret_: lzma_ret = lzma_filter_flags_size(&mut add_1, &*block.filters.add(i));
+        let ret_: lzma_ret = lzma_filter_flags_size(&mut add_1, c_ref(block.filters.add(i)));
         if ret_ != LZMA_OK {
             return ret_;
         }
@@ -88,7 +88,7 @@ pub unsafe fn lzma_block_header_encode(block: &lzma_block, out: &mut [u8]) -> lz
             return LZMA_PROG_ERROR;
         }
         let ret__1: lzma_ret =
-            lzma_filter_flags_encode(&*block.filters.add(filter_count), out, &mut out_pos);
+            lzma_filter_flags_encode(c_ref(block.filters.add(filter_count)), out, &mut out_pos);
         if ret__1 != LZMA_OK {
             return ret__1;
         }

@@ -232,7 +232,7 @@ unsafe fn stream_decode(
                     };
                 }
                 let footer_flags = footer_flags.assume_init();
-                if lzma_index_hash_size(&*(*coder).index_hash) != footer_flags.backward_size {
+                if lzma_index_hash_size(c_ref((*coder).index_hash)) != footer_flags.backward_size {
                     return LZMA_DATA_ERROR;
                 }
                 let ret: lzma_ret =

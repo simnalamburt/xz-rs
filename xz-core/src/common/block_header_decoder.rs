@@ -79,7 +79,7 @@ pub unsafe fn lzma_block_header_decode(
     let mut i_0: size_t = 0;
     while i_0 < filter_count {
         let ret: lzma_ret =
-            lzma_filter_flags_decode(&mut *block.filters.add(i_0), allocator, input, &mut in_pos);
+            lzma_filter_flags_decode(c_mut(block.filters.add(i_0)), allocator, input, &mut in_pos);
         if ret != LZMA_OK {
             lzma_filters_free(block.filters, allocator);
             return ret;

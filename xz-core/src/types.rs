@@ -931,6 +931,36 @@ pub fn is_backward_size_valid(options: &lzma_stream_flags) -> bool {
 pub fn index_size(count: lzma_vli, index_list_size: lzma_vli) -> lzma_vli {
     vli_ceil4(index_size_unpadded(count, index_list_size))
 }
+/// Turns a pointer into a reference. Without `extra-safety` this is a plain
+/// dereference. With it, NULL panics instead of being undefined.
+///
+/// # Safety
+/// `ptr` must be valid for reads for `'a`, or NULL under `extra-safety`.
+#[inline(always)]
+pub(crate) unsafe fn c_ref<'a, T>(ptr: *const T) -> &'a T {
+    #[cfg(feature = "extra-safety")]
+    {
+        unsafe { ptr.as_ref() }.expect("NULL pointer dereferenced in xz-core")
+    }
+    #[cfg(not(feature = "extra-safety"))]
+    {
+        unsafe { &*ptr }
+    }
+}
+
+/// Mutable form of [`c_ref`].
+#[inline(always)]
+pub(crate) unsafe fn c_mut<'a, T>(ptr: *mut T) -> &'a mut T {
+    #[cfg(feature = "extra-safety")]
+    {
+        unsafe { ptr.as_mut() }.expect("NULL pointer dereferenced in xz-core")
+    }
+    #[cfg(not(feature = "extra-safety"))]
+    {
+        unsafe { &mut *ptr }
+    }
+}
+
 /// Borrow a C buffer as a slice.
 ///
 /// The transpiled coder interface passes a pointer and a size, and allows the
@@ -945,6 +975,11 @@ pub(crate) unsafe fn c_slice<'a>(ptr: *const u8, len: size_t) -> &'a [u8] {
     if len == 0 {
         &[]
     } else {
+        #[cfg(feature = "extra-safety")]
+        assert!(
+            !ptr.is_null(),
+            "NULL buffer with non-zero length in xz-core"
+        );
         core::slice::from_raw_parts(ptr, len)
     }
 }
@@ -958,6 +993,11 @@ pub(crate) unsafe fn c_slice_mut<'a>(ptr: *mut u8, len: size_t) -> &'a mut [u8] 
     if len == 0 {
         &mut []
     } else {
+        #[cfg(feature = "extra-safety")]
+        assert!(
+            !ptr.is_null(),
+            "NULL buffer with non-zero length in xz-core"
+        );
         core::slice::from_raw_parts_mut(ptr, len)
     }
 }

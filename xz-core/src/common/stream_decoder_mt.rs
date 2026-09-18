@@ -1193,7 +1193,7 @@ unsafe fn stream_decode_mt(
                         ret_6
                     };
                 }
-                if lzma_index_hash_size(&*(*coder).index_hash) != footer_flags.backward_size {
+                if lzma_index_hash_size(c_ref((*coder).index_hash)) != footer_flags.backward_size {
                     return LZMA_DATA_ERROR;
                 }
                 let ret__6: lzma_ret =
