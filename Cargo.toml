@@ -57,6 +57,7 @@ parallel = ["xz-sys?/parallel", "liblzma-sys?/parallel", "num_cpus"]
 bindgen = ["liblzma-sys?/bindgen"] # only affects liblzma-sys
 wasm = ["xz-sys?/wasm", "liblzma-sys?/wasm"]
 uncheck_liblzma_version = ["liblzma-sys?/uncheck_liblzma_version"] # only affects liblzma-sys
+extra-safety = ["xz-sys?/extra-safety"] # only affects xz-sys
 bench = ["criterion"]
 # These two are for cross-language LTO with liblzma-sys.
 fat-lto = ["liblzma-sys?/fat-lto"]

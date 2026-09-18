@@ -127,10 +127,12 @@ fn rs_sys_exports_required_public_wrappers() {
 fn xz_sys_keeps_liblzma_sys_compatible_features() {
     let rs_sys_features = parse_feature_table(include_str!("../Cargo.toml"));
     // Keep this list aligned with liblzma-sys 0.4.6 so xz-sys remains a
-    // drop-in feature-compatible replacement for consumers.
+    // drop-in feature-compatible replacement for consumers. `extra-safety`
+    // is the one addition: it has no liblzma-sys counterpart.
     let expected = BTreeMap::from([
         ("bindgen".to_string(), Vec::new()),
         ("default".to_string(), vec!["bindgen".to_string()]),
+        ("extra-safety".to_string(), Vec::new()),
         ("fat-lto".to_string(), Vec::new()),
         ("parallel".to_string(), Vec::new()),
         ("static".to_string(), Vec::new()),
