@@ -67,15 +67,11 @@ unsafe fn alone_encoder_end(coder_ptr: *mut c_void, allocator: *const lzma_alloc
 unsafe fn alone_encoder_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
-    options: *const lzma_options_lzma,
+    options: &lzma_options_lzma,
 ) -> lzma_ret {
     if core::mem::transmute::<
         Option<
-            unsafe fn(
-                *mut lzma_next_coder,
-                *const lzma_allocator,
-                *const lzma_options_lzma,
-            ) -> lzma_ret,
+            unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_options_lzma) -> lzma_ret,
         >,
         uintptr_t,
     >(Some(
@@ -83,7 +79,7 @@ unsafe fn alone_encoder_init(
             as unsafe fn(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
-                *const lzma_options_lzma,
+                &lzma_options_lzma,
             ) -> lzma_ret,
     )) != (*next).init
     {
@@ -91,11 +87,7 @@ unsafe fn alone_encoder_init(
     }
     (*next).init = core::mem::transmute::<
         Option<
-            unsafe fn(
-                *mut lzma_next_coder,
-                *const lzma_allocator,
-                *const lzma_options_lzma,
-            ) -> lzma_ret,
+            unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_options_lzma) -> lzma_ret,
         >,
         uintptr_t,
     >(Some(
@@ -103,7 +95,7 @@ unsafe fn alone_encoder_init(
             as unsafe fn(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
-                *const lzma_options_lzma,
+                &lzma_options_lzma,
             ) -> lzma_ret,
     ));
     let mut coder: *mut lzma_alone_coder = (*next).coder as *mut lzma_alone_coder;
@@ -150,10 +142,10 @@ unsafe fn alone_encoder_init(
     ) {
         return LZMA_OPTIONS_ERROR;
     }
-    if (*options).dict_size < LZMA_DICT_SIZE_MIN as u32 {
+    if options.dict_size < LZMA_DICT_SIZE_MIN as u32 {
         return LZMA_OPTIONS_ERROR;
     }
-    let mut d: u32 = (*options).dict_size - 1;
+    let mut d: u32 = options.dict_size - 1;
     d |= d >> 2;
     d |= d >> 3;
     d |= d >> 4;
@@ -186,7 +178,7 @@ unsafe fn alone_encoder_init(
                         *const lzma_filter_info,
                     ) -> lzma_ret,
             ),
-            options: options as *mut c_void,
+            options: options as *const lzma_options_lzma as *mut c_void,
         },
         lzma_filter_info_s {
             id: 0,
@@ -200,10 +192,7 @@ unsafe fn alone_encoder_init(
         ::core::ptr::addr_of!(filters) as *const lzma_filter_info,
     )
 }
-pub unsafe fn lzma_alone_encoder(
-    strm: &mut lzma_stream,
-    options: *const lzma_options_lzma,
-) -> lzma_ret {
+pub unsafe fn lzma_alone_encoder(strm: &mut lzma_stream, options: &lzma_options_lzma) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
     if ret != LZMA_OK {
         return ret;

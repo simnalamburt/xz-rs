@@ -1433,31 +1433,31 @@ unsafe fn stream_decoder_mt_get_progress(
 unsafe fn stream_decoder_mt_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
-    options: *const lzma_mt,
+    options: &lzma_mt,
 ) -> lzma_ret {
     let mut coder: *mut lzma_stream_coder = core::ptr::null_mut();
-    if (*options).threads == 0 || (*options).threads > LZMA_THREADS_MAX {
+    if options.threads == 0 || options.threads > LZMA_THREADS_MAX {
         return LZMA_OPTIONS_ERROR;
     }
-    if (*options).flags & !(LZMA_SUPPORTED_FLAGS as u32) != 0 {
+    if options.flags & !(LZMA_SUPPORTED_FLAGS as u32) != 0 {
         return LZMA_OPTIONS_ERROR;
     }
     if core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret>,
         uintptr_t,
     >(Some(
         stream_decoder_mt_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret,
     )) != (*next).init
     {
         lzma_next_end(next, allocator);
     }
     (*next).init = core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret>,
         uintptr_t,
     >(Some(
         stream_decoder_mt_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret,
     ));
     coder = (*next).coder as *mut lzma_stream_coder;
     if coder.is_null() {
@@ -1541,30 +1541,30 @@ unsafe fn stream_decoder_mt_init(
     (*coder).thread_error = LZMA_OK;
     (*coder).pending_error = LZMA_OK;
     (*coder).thr = core::ptr::null_mut();
-    (*coder).timeout = (*options).timeout;
-    (*coder).memlimit_threading = if 1 > (*options).memlimit_threading {
+    (*coder).timeout = options.timeout;
+    (*coder).memlimit_threading = if 1 > options.memlimit_threading {
         1
     } else {
-        (*options).memlimit_threading
+        options.memlimit_threading
     };
-    (*coder).memlimit_stop = if 1 > (*options).memlimit_stop {
+    (*coder).memlimit_stop = if 1 > options.memlimit_stop {
         1
     } else {
-        (*options).memlimit_stop
+        options.memlimit_stop
     };
     if (*coder).memlimit_threading > (*coder).memlimit_stop {
         (*coder).memlimit_threading = (*coder).memlimit_stop;
     }
-    (*coder).tell_no_check = (*options).flags & LZMA_TELL_NO_CHECK as u32 != 0;
-    (*coder).tell_unsupported_check = (*options).flags & LZMA_TELL_UNSUPPORTED_CHECK as u32 != 0;
-    (*coder).tell_any_check = (*options).flags & LZMA_TELL_ANY_CHECK as u32 != 0;
-    (*coder).ignore_check = (*options).flags & LZMA_IGNORE_CHECK as u32 != 0;
-    (*coder).concatenated = (*options).flags & LZMA_CONCATENATED as u32 != 0;
-    (*coder).fail_fast = (*options).flags & LZMA_FAIL_FAST as u32 != 0;
+    (*coder).tell_no_check = options.flags & LZMA_TELL_NO_CHECK as u32 != 0;
+    (*coder).tell_unsupported_check = options.flags & LZMA_TELL_UNSUPPORTED_CHECK as u32 != 0;
+    (*coder).tell_any_check = options.flags & LZMA_TELL_ANY_CHECK as u32 != 0;
+    (*coder).ignore_check = options.flags & LZMA_IGNORE_CHECK as u32 != 0;
+    (*coder).concatenated = options.flags & LZMA_CONCATENATED as u32 != 0;
+    (*coder).fail_fast = options.flags & LZMA_FAIL_FAST as u32 != 0;
     (*coder).first_stream = true;
     (*coder).out_was_filled = false;
     (*coder).pos = 0;
-    (*coder).threads_max = (*options).threads;
+    (*coder).threads_max = options.threads;
     let ret_: lzma_ret = lzma_outq_init(
         ::core::ptr::addr_of_mut!((*coder).outq),
         allocator,
@@ -1575,7 +1575,7 @@ unsafe fn stream_decoder_mt_init(
     }
     stream_decoder_reset(coder, allocator)
 }
-pub unsafe fn lzma_stream_decoder_mt(strm: &mut lzma_stream, options: *const lzma_mt) -> lzma_ret {
+pub unsafe fn lzma_stream_decoder_mt(strm: &mut lzma_stream, options: &lzma_mt) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;

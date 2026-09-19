@@ -61,15 +61,11 @@ unsafe fn microlzma_encoder_end(coder_ptr: *mut c_void, allocator: *const lzma_a
 unsafe fn microlzma_encoder_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
-    options: *const lzma_options_lzma,
+    options: &lzma_options_lzma,
 ) -> lzma_ret {
     if core::mem::transmute::<
         Option<
-            unsafe fn(
-                *mut lzma_next_coder,
-                *const lzma_allocator,
-                *const lzma_options_lzma,
-            ) -> lzma_ret,
+            unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_options_lzma) -> lzma_ret,
         >,
         uintptr_t,
     >(Some(
@@ -77,7 +73,7 @@ unsafe fn microlzma_encoder_init(
             as unsafe fn(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
-                *const lzma_options_lzma,
+                &lzma_options_lzma,
             ) -> lzma_ret,
     )) != (*next).init
     {
@@ -85,11 +81,7 @@ unsafe fn microlzma_encoder_init(
     }
     (*next).init = core::mem::transmute::<
         Option<
-            unsafe fn(
-                *mut lzma_next_coder,
-                *const lzma_allocator,
-                *const lzma_options_lzma,
-            ) -> lzma_ret,
+            unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_options_lzma) -> lzma_ret,
         >,
         uintptr_t,
     >(Some(
@@ -97,7 +89,7 @@ unsafe fn microlzma_encoder_init(
             as unsafe fn(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
-                *const lzma_options_lzma,
+                &lzma_options_lzma,
             ) -> lzma_ret,
     ));
     let mut coder: *mut lzma_microlzma_coder = (*next).coder as *mut lzma_microlzma_coder;
@@ -150,7 +142,7 @@ unsafe fn microlzma_encoder_init(
                         *const lzma_filter_info,
                     ) -> lzma_ret,
             ),
-            options: options as *mut c_void,
+            options: options as *const lzma_options_lzma as *mut c_void,
         },
         lzma_filter_info_s {
             id: 0,
@@ -166,7 +158,7 @@ unsafe fn microlzma_encoder_init(
 }
 pub unsafe fn lzma_microlzma_encoder(
     strm: &mut lzma_stream,
-    options: *const lzma_options_lzma,
+    options: &lzma_options_lzma,
 ) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
     if ret != LZMA_OK {

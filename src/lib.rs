@@ -131,6 +131,42 @@ pub(crate) mod sys {
     ) -> lzma_ret {
         unsafe { xz_sys::lzma_stream_footer_decode(options, input.as_ptr()) }
     }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    pub(crate) unsafe fn lzma_alone_encoder(
+        strm: &mut lzma_stream,
+        options: &lzma_options_lzma,
+    ) -> lzma_ret {
+        unsafe { xz_sys::lzma_alone_encoder(strm, options as *const _) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    #[cfg(feature = "parallel")]
+    pub(crate) unsafe fn lzma_stream_encoder_mt(
+        strm: &mut lzma_stream,
+        options: &lzma_mt,
+    ) -> lzma_ret {
+        unsafe { xz_sys::lzma_stream_encoder_mt(strm, options as *const _) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    #[cfg(feature = "parallel")]
+    pub(crate) unsafe fn lzma_stream_decoder_mt(
+        strm: &mut lzma_stream,
+        options: &lzma_mt,
+    ) -> lzma_ret {
+        unsafe { xz_sys::lzma_stream_decoder_mt(strm, options as *const _) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    #[cfg(feature = "parallel")]
+    pub(crate) fn lzma_stream_encoder_mt_memusage(options: &lzma_mt) -> u64 {
+        unsafe { xz_sys::lzma_stream_encoder_mt_memusage(options as *const _) }
+    }
 }
 
 #[cfg(feature = "liblzma-sys")]
@@ -168,6 +204,42 @@ pub(crate) mod sys {
         input: &[u8; LZMA_STREAM_HEADER_SIZE as usize],
     ) -> lzma_ret {
         unsafe { liblzma_sys::lzma_stream_footer_decode(options, input.as_ptr()) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    pub(crate) unsafe fn lzma_alone_encoder(
+        strm: &mut lzma_stream,
+        options: &lzma_options_lzma,
+    ) -> lzma_ret {
+        unsafe { liblzma_sys::lzma_alone_encoder(strm, options as *const _) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    #[cfg(feature = "parallel")]
+    pub(crate) unsafe fn lzma_stream_encoder_mt(
+        strm: &mut lzma_stream,
+        options: &lzma_mt,
+    ) -> lzma_ret {
+        unsafe { liblzma_sys::lzma_stream_encoder_mt(strm, options as *const _) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    #[cfg(feature = "parallel")]
+    pub(crate) unsafe fn lzma_stream_decoder_mt(
+        strm: &mut lzma_stream,
+        options: &lzma_mt,
+    ) -> lzma_ret {
+        unsafe { liblzma_sys::lzma_stream_decoder_mt(strm, options as *const _) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    #[cfg(feature = "parallel")]
+    pub(crate) fn lzma_stream_encoder_mt_memusage(options: &lzma_mt) -> u64 {
+        unsafe { liblzma_sys::lzma_stream_encoder_mt_memusage(options as *const _) }
     }
 }
 

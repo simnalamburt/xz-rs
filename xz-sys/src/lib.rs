@@ -530,7 +530,7 @@ pub unsafe extern "C" fn lzma_alone_encoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::alone_encoder::lzma_alone_encoder(strm, options.cast())
+    xz_core::common::alone_encoder::lzma_alone_encoder(strm, c_ref(options.cast()))
 }
 
 #[unsafe(no_mangle)]
@@ -1525,7 +1525,7 @@ pub unsafe extern "C" fn lzma_microlzma_encoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::microlzma_encoder::lzma_microlzma_encoder(strm, options.cast())
+    xz_core::common::microlzma_encoder::lzma_microlzma_encoder(strm, c_ref(options.cast()))
 }
 
 #[unsafe(no_mangle)]
@@ -1580,7 +1580,11 @@ pub unsafe extern "C" fn lzma_stream_encoder_mt(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::stream_mt::lzma_stream_encoder_mt(strm, options.cast())
+    // C's get_options returns LZMA_PROG_ERROR for a NULL options.
+    if options.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::stream_mt::lzma_stream_encoder_mt(strm, c_ref(options.cast()))
 }
 
 #[cfg(feature = "parallel")]
@@ -1592,11 +1596,15 @@ pub unsafe extern "C" fn lzma_stream_decoder_mt(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::stream_mt::lzma_stream_decoder_mt(strm, options.cast())
+    xz_core::common::stream_mt::lzma_stream_decoder_mt(strm, c_ref(options.cast()))
 }
 
 #[cfg(feature = "parallel")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lzma_stream_encoder_mt_memusage(options: *const lzma_mt) -> u64 {
-    xz_core::common::stream_mt::lzma_stream_encoder_mt_memusage(options.cast())
+    // C's get_options returns LZMA_PROG_ERROR for NULL, mapped here to UINT64_MAX.
+    if options.is_null() {
+        return u64::MAX;
+    }
+    xz_core::common::stream_mt::lzma_stream_encoder_mt_memusage(c_ref(options.cast()))
 }

@@ -1021,28 +1021,25 @@ unsafe fn stream_encoder_mt_update(
     LZMA_OK
 }
 unsafe fn get_options(
-    options: *const lzma_mt,
+    options: &lzma_mt,
     opt_easy: *mut lzma_options_easy,
     filters: *mut *const lzma_filter,
     block_size: *mut u64,
     outbuf_size_max: *mut u64,
 ) -> lzma_ret {
-    if options.is_null() {
-        return LZMA_PROG_ERROR;
-    }
-    if (*options).flags != 0 || (*options).threads == 0 || (*options).threads > LZMA_THREADS_MAX {
+    if options.flags != 0 || options.threads == 0 || options.threads > LZMA_THREADS_MAX {
         return LZMA_OPTIONS_ERROR;
     }
-    if !(*options).filters.is_null() {
-        *filters = (*options).filters;
+    if !options.filters.is_null() {
+        *filters = options.filters;
     } else {
-        if lzma_easy_preset(c_mut(opt_easy), (*options).preset) {
+        if lzma_easy_preset(c_mut(opt_easy), options.preset) {
             return LZMA_OPTIONS_ERROR;
         }
         *filters = ::core::ptr::addr_of_mut!((*opt_easy).filters) as *mut lzma_filter;
     }
-    if (*options).block_size > 0 {
-        *block_size = (*options).block_size;
+    if options.block_size > 0 {
+        *block_size = options.block_size;
     } else {
         *block_size = lzma_mt_block_size(*filters);
     }
@@ -1199,24 +1196,24 @@ unsafe fn stream_encoder_mt_prepare_threads(
 unsafe fn stream_encoder_mt_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
-    options: *const lzma_mt,
+    options: &lzma_mt,
 ) -> lzma_ret {
     if core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret>,
         uintptr_t,
     >(Some(
         stream_encoder_mt_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret,
     )) != (*next).init
     {
         lzma_next_end(next, allocator);
     }
     (*next).init = core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret>,
         uintptr_t,
     >(Some(
         stream_encoder_mt_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret,
     ));
     let mut easy: lzma_options_easy = lzma_options_easy {
         filters: [lzma_filter {
@@ -1270,10 +1267,10 @@ unsafe fn stream_encoder_mt_init(
     if lzma_raw_encoder_memusage(filters) == UINT64_MAX {
         return LZMA_OPTIONS_ERROR;
     }
-    if (*options).check as c_uint > LZMA_CHECK_ID_MAX as c_uint {
+    if options.check as c_uint > LZMA_CHECK_ID_MAX as c_uint {
         return LZMA_PROG_ERROR;
     }
-    if lzma_check_is_supported((*options).check) == 0 {
+    if lzma_check_is_supported(options.check) == 0 {
         return LZMA_UNSUPPORTED_CHECK;
     }
     let mut coder: *mut lzma_stream_coder = (*next).coder as *mut lzma_stream_coder;
@@ -1288,19 +1285,19 @@ unsafe fn stream_encoder_mt_init(
     (*coder).outbuf_alloc_size = outbuf_size_max as size_t;
     (*coder).thread_error = LZMA_OK;
     (*coder).thr = core::ptr::null_mut();
-    let ret__0: lzma_ret = stream_encoder_mt_prepare_threads(coder, allocator, (*options).threads);
+    let ret__0: lzma_ret = stream_encoder_mt_prepare_threads(coder, allocator, options.threads);
     if ret__0 != LZMA_OK {
         return ret__0;
     }
     let ret__1: lzma_ret = lzma_outq_init(
         ::core::ptr::addr_of_mut!((*coder).outq),
         allocator,
-        (*options).threads,
+        options.threads,
     );
     if ret__1 != LZMA_OK {
         return ret__1;
     }
-    (*coder).timeout = (*options).timeout;
+    (*coder).timeout = options.timeout;
     lzma_filters_free(
         ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
         allocator,
@@ -1325,7 +1322,7 @@ unsafe fn stream_encoder_mt_init(
         return LZMA_MEM_ERROR;
     }
     (*coder).stream_flags.version = 0;
-    (*coder).stream_flags.check = (*options).check;
+    (*coder).stream_flags.check = options.check;
     let ret__3: lzma_ret = lzma_stream_header_encode(&(*coder).stream_flags, &mut (*coder).header);
     if ret__3 != LZMA_OK {
         return ret__3;
@@ -1335,7 +1332,7 @@ unsafe fn stream_encoder_mt_init(
     (*coder).progress_out = LZMA_STREAM_HEADER_SIZE as u64;
     LZMA_OK
 }
-pub unsafe fn lzma_stream_encoder_mt(strm: &mut lzma_stream, options: *const lzma_mt) -> lzma_ret {
+pub unsafe fn lzma_stream_encoder_mt(strm: &mut lzma_stream, options: &lzma_mt) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;
@@ -1355,7 +1352,7 @@ pub unsafe fn lzma_stream_encoder_mt(strm: &mut lzma_stream, options: *const lzm
     (*(*strm).internal).supported_actions[LZMA_FINISH as usize] = true;
     LZMA_OK
 }
-pub unsafe fn lzma_stream_encoder_mt_memusage(options: *const lzma_mt) -> u64 {
+pub unsafe fn lzma_stream_encoder_mt_memusage(options: &lzma_mt) -> u64 {
     let mut easy: lzma_options_easy = lzma_options_easy {
         filters: [lzma_filter {
             id: 0,
@@ -1401,21 +1398,20 @@ pub unsafe fn lzma_stream_encoder_mt_memusage(options: *const lzma_mt) -> u64 {
     {
         return UINT64_MAX;
     }
-    let inbuf_memusage: u64 = ((*options).threads as u64).wrapping_mul(block_size);
+    let inbuf_memusage: u64 = (options.threads as u64).wrapping_mul(block_size);
     let mut filters_memusage: u64 = lzma_raw_encoder_memusage(filters);
     if filters_memusage == UINT64_MAX {
         return UINT64_MAX;
     }
-    filters_memusage = filters_memusage.wrapping_mul((*options).threads as u64);
-    let outq_memusage: u64 = lzma_outq_memusage(outbuf_size_max, (*options).threads) as u64;
+    filters_memusage = filters_memusage.wrapping_mul(options.threads as u64);
+    let outq_memusage: u64 = lzma_outq_memusage(outbuf_size_max, options.threads) as u64;
     if outq_memusage == UINT64_MAX {
         return UINT64_MAX;
     }
     let mut total_memusage: u64 = (LZMA_MEMUSAGE_BASE)
         .wrapping_add(core::mem::size_of::<lzma_stream_coder>() as u64)
         .wrapping_add(
-            ((*options).threads as usize).wrapping_mul(core::mem::size_of::<worker_thread>())
-                as u64,
+            (options.threads as usize).wrapping_mul(core::mem::size_of::<worker_thread>()) as u64,
         );
     if (UINT64_MAX).wrapping_sub(total_memusage) < inbuf_memusage {
         return UINT64_MAX;
