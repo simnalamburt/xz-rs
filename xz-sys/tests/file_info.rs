@@ -4,9 +4,9 @@ use std::mem::MaybeUninit;
 use std::ptr;
 
 use xz_sys::{
-    lzma_code, lzma_easy_buffer_encode, lzma_end, lzma_file_info_decoder, lzma_index,
-    lzma_index_end, lzma_index_stream_count, lzma_index_uncompressed_size, lzma_stream,
-    LZMA_CHECK_CRC64, LZMA_OK, LZMA_RUN, LZMA_SEEK_NEEDED, LZMA_STREAM_END,
+    LZMA_CHECK_CRC64, LZMA_OK, LZMA_RUN, LZMA_SEEK_NEEDED, LZMA_STREAM_END, lzma_code,
+    lzma_easy_buffer_encode, lzma_end, lzma_file_info_decoder, lzma_index, lzma_index_end,
+    lzma_index_stream_count, lzma_index_uncompressed_size, lzma_stream,
 };
 
 fn encode_stream(data: &[u8]) -> Vec<u8> {

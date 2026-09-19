@@ -34,7 +34,7 @@ unsafe fn alone_decode(
             0 => {
                 if lzma_lzma_lclppb_decode(
                     ::core::ptr::addr_of_mut!((*coder).options),
-                    *input.offset(*in_pos as isize),
+                    *input.add(*in_pos),
                 ) {
                     return LZMA_FORMAT_ERROR;
                 }
@@ -43,7 +43,7 @@ unsafe fn alone_decode(
             }
             1 => {
                 (*coder).options.dict_size = ((*coder).options.dict_size as size_t
-                    | (*input.offset(*in_pos as isize) as size_t) << ((*coder).pos * 8))
+                    | (*input.add(*in_pos) as size_t) << ((*coder).pos * 8))
                     as u32;
                 (*coder).pos += 1;
                 if (*coder).pos == 4 {
@@ -66,7 +66,7 @@ unsafe fn alone_decode(
             }
             2 => {
                 (*coder).uncompressed_size |=
-                    (*input.offset(*in_pos as isize) as lzma_vli) << ((*coder).pos * 8);
+                    (*input.add(*in_pos) as lzma_vli) << ((*coder).pos * 8);
                 *in_pos += 1;
                 (*coder).pos += 1;
                 if (*coder).pos >= 8 {
@@ -236,7 +236,7 @@ pub(crate) unsafe fn lzma_alone_decoder_init(
     (*coder).memusage = LZMA_MEMUSAGE_BASE;
     LZMA_OK
 }
-pub unsafe fn lzma_alone_decoder(strm: *mut lzma_stream, memlimit: u64) -> lzma_ret {
+pub unsafe fn lzma_alone_decoder(strm: &mut lzma_stream, memlimit: u64) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;

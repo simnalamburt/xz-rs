@@ -26,15 +26,10 @@ use liblzma_sys::{
 #[cfg(feature = "xz-core-custom-allocator")]
 use xz_core::alloc::{c_allocator, rust_allocator};
 #[cfg(feature = "xz-core")]
-use xz_core::check::{crc32_fast::lzma_crc32, crc64_fast::lzma_crc64};
-#[cfg(feature = "xz-core")]
 use xz_core::common::{
-    easy_buffer_encoder::lzma_easy_buffer_encode,
-    index::{lzma_index_end, lzma_index_uncompressed_size},
-    index_decoder::lzma_index_buffer_decode,
-    stream_buffer_decoder::lzma_stream_buffer_decode,
+    easy_buffer_encoder::lzma_easy_buffer_encode, index::lzma_index_end,
+    index_decoder::lzma_index_buffer_decode, stream_buffer_decoder::lzma_stream_buffer_decode,
     stream_buffer_encoder::lzma_stream_buffer_bound,
-    stream_flags_decoder::lzma_stream_footer_decode,
 };
 #[cfg(feature = "xz-core")]
 use xz_core::types::{
@@ -97,8 +92,33 @@ struct Config {
 #[derive(Debug)]
 struct Measurement {
     elapsed: Duration,
+    cpu: Duration,
     throughput_mib_s: f64,
     digest: u64,
+}
+
+// Wall clock counts the time the process spends descheduled, so on a loaded
+// machine it measures the rest of the system as much as the backend. Thread
+// CPU time only advances while this thread is on a core, which keeps the
+// backend comparison usable when the machine is busy. It still cannot tell a
+// performance core from an efficiency one, so callers should compare minima
+// over several rounds rather than single measurements.
+#[cfg(unix)]
+fn thread_cpu_time() -> Duration {
+    let mut ts = std::mem::MaybeUninit::<libc::timespec>::zeroed();
+    let ret = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, ts.as_mut_ptr()) };
+    if ret != 0 {
+        return Duration::ZERO;
+    }
+    let ts = unsafe { ts.assume_init() };
+    Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32)
+}
+
+// Reported as zero rather than silently substituting the wall clock, so a
+// platform without a thread CPU clock is visible in the output.
+#[cfg(not(unix))]
+fn thread_cpu_time() -> Duration {
+    Duration::ZERO
 }
 
 fn main() {
@@ -485,15 +505,18 @@ where
         digest ^= black_box(work());
     }
 
+    let cpu_start = thread_cpu_time();
     let start = Instant::now();
     for _ in 0..iters {
         digest ^= black_box(work());
     }
     let elapsed = start.elapsed();
+    let cpu = thread_cpu_time().saturating_sub(cpu_start);
     let mib = (bytes_per_iter as f64 * iters as f64) / (1024.0 * 1024.0);
 
     Measurement {
         elapsed,
+        cpu,
         throughput_mib_s: mib / elapsed.as_secs_f64(),
         digest,
     }
@@ -501,10 +524,11 @@ where
 
 fn print_measurement(measurement: &Measurement, iters: usize) {
     println!(
-        "{}: total={:.3?} ns_per_iter={:.0} throughput_mib_s={:.2} digest={:#x}",
+        "{}: total={:.3?} ns_per_iter={:.0} cpu_ns_per_iter={:.0} throughput_mib_s={:.2} digest={:#x}",
         BACKEND_NAME,
         measurement.elapsed,
         measurement.elapsed.as_nanos() as f64 / iters as f64,
+        measurement.cpu.as_nanos() as f64 / iters as f64,
         measurement.throughput_mib_s,
         measurement.digest
     );
@@ -595,6 +619,40 @@ unsafe fn backend_decode(compressed: &[u8], out_size: usize) -> Vec<u8> {
     );
     out.truncate(out_pos);
     out
+}
+
+/// xz-core takes the buffer as a slice; the other two backends take a pointer
+/// and a size. These keep one shape for the shared code below.
+#[cfg(feature = "xz-core")]
+unsafe fn lzma_crc32(buf: *const u8, size: usize, crc: u32) -> u32 {
+    xz_core::check::crc32_fast::crc32(unsafe { core::slice::from_raw_parts(buf, size) }, crc)
+}
+
+#[cfg(feature = "xz-core")]
+unsafe fn lzma_crc64(buf: *const u8, size: usize, crc: u64) -> u64 {
+    xz_core::check::crc64_fast::crc64(unsafe { core::slice::from_raw_parts(buf, size) }, crc)
+}
+
+/// xz-core takes the Index by reference; the other two backends take a bare
+/// pointer. This keeps one shape for the shared code below.
+#[cfg(feature = "xz-core")]
+unsafe fn lzma_index_uncompressed_size(i: *const BackendIndex) -> u64 {
+    unsafe { xz_core::common::index::lzma_index_uncompressed_size(&*i) }
+}
+
+/// xz-core states the twelve-byte Stream Footer in the type; the other two
+/// backends take a bare pointer. This keeps one shape for the shared code below.
+#[cfg(feature = "xz-core")]
+unsafe fn lzma_stream_footer_decode(
+    options: *mut BackendStreamFlags,
+    input: *const u8,
+) -> xz_core::types::lzma_ret {
+    unsafe {
+        xz_core::common::stream_flags_decoder::lzma_stream_footer_decode(
+            &mut *options,
+            &*input.cast(),
+        )
+    }
 }
 
 unsafe fn backend_uncompressed_size(compressed: &[u8]) -> u64 {

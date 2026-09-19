@@ -479,7 +479,7 @@ unsafe fn transform(state: *mut u32, data: *const u32) {
         j = j.wrapping_add(16);
     }
     for i in 0..8 {
-        *state.offset(i as isize) = (*state.offset(i as isize)).wrapping_add(T[i]);
+        *state.add(i) = (*state.add(i)).wrapping_add(T[i]);
     }
 }
 unsafe fn process(check: *mut lzma_check_state) {
@@ -513,11 +513,10 @@ pub unsafe fn lzma_sha256_update(
         }
         core::ptr::copy_nonoverlapping(
             buf as *const u8,
-            (::core::ptr::addr_of_mut!((*check).buffer.u8_0) as *mut u8).offset(copy_start as isize)
-                as *mut u8,
+            (::core::ptr::addr_of_mut!((*check).buffer.u8_0) as *mut u8).add(copy_start) as *mut u8,
             copy_size,
         );
-        buf = buf.offset(copy_size as isize);
+        buf = buf.add(copy_size);
         size = size.wrapping_sub(copy_size);
         (*check).state.sha256.size = (*check).state.sha256.size.wrapping_add(copy_size as u64);
         if (*check).state.sha256.size & 0x3f as u64 == 0 {

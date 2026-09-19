@@ -59,7 +59,7 @@ unsafe fn block_encode(
                 lzma_check_update(
                     ::core::ptr::addr_of_mut!((*coder).check),
                     (*(*coder).block).check,
-                    input.offset(in_start as isize),
+                    input.add(in_start),
                     in_used,
                 );
             }
@@ -78,7 +78,7 @@ unsafe fn block_encode(
             if *out_pos >= out_size {
                 return LZMA_OK;
             }
-            *out.offset(*out_pos as isize) = 0;
+            *out.add(*out_pos) = 0;
             *out_pos += 1;
             (*coder).compressed_size += 1;
         }
@@ -222,7 +222,7 @@ pub(crate) unsafe fn lzma_block_encoder_init(
         (*block).filters,
     )
 }
-pub unsafe fn lzma_block_encoder(strm: *mut lzma_stream, block: *mut lzma_block) -> lzma_ret {
+pub unsafe fn lzma_block_encoder(strm: &mut lzma_stream, block: *mut lzma_block) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;

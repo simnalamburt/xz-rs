@@ -68,7 +68,7 @@ unsafe fn decode_buffer(
                 (*coder)
                     .dict
                     .buf
-                    .offset((*coder).dict.size as isize)
+                    .add((*coder).dict.size)
                     .offset(-(LZ_DICT_REPEAT_MAX as isize)) as *const u8,
                 (*coder).dict.buf as *mut u8,
                 LZ_DICT_REPEAT_MAX as size_t,
@@ -93,8 +93,8 @@ unsafe fn decode_buffer(
         let copy_size: size_t = (*coder).dict.pos.wrapping_sub(dict_start);
         if copy_size > 0 {
             core::ptr::copy_nonoverlapping(
-                (*coder).dict.buf.offset(dict_start as isize) as *const u8,
-                out.offset(*out_pos as isize) as *mut u8,
+                (*coder).dict.buf.add(dict_start) as *const u8,
+                out.add(*out_pos) as *mut u8,
                 copy_size,
             );
         }
@@ -300,8 +300,8 @@ pub unsafe fn lzma_lz_decoder_init(
         };
         let offset: size_t = lz_options.preset_dict_size.wrapping_sub(copy_size);
         core::ptr::copy_nonoverlapping(
-            lz_options.preset_dict.offset(offset as isize) as *const u8,
-            (*coder).dict.buf.offset((*coder).dict.pos as isize) as *mut u8,
+            lz_options.preset_dict.add(offset) as *const u8,
+            (*coder).dict.buf.add((*coder).dict.pos) as *mut u8,
             copy_size,
         );
         (*coder).dict.pos = (*coder).dict.pos.wrapping_add(copy_size);

@@ -414,7 +414,7 @@ mod tests {
         let data = c.finish().unwrap().finish().unwrap();
         assert_eq!(&data[0..5], b"12834");
         assert_eq!(data.len(), 500005);
-        assert_eq!(format!("12834{}", s).as_bytes(), &*data);
+        assert_eq!(format!("12834{}", s).as_bytes(), data.as_slice());
     }
 
     #[test]

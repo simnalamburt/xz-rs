@@ -1146,7 +1146,7 @@ pub(crate) unsafe fn lzma_lzma_encoder_memusage(options: *const c_void) -> u64 {
         ::core::ptr::addr_of_mut!(lz_options),
         options as *const lzma_options_lzma,
     );
-    let lz_memusage: u64 = lzma_lz_encoder_memusage(::core::ptr::addr_of_mut!(lz_options)) as u64;
+    let lz_memusage: u64 = lzma_lz_encoder_memusage(&lz_options) as u64;
     if lz_memusage == UINT64_MAX {
         return UINT64_MAX;
     }

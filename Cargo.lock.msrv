@@ -398,9 +398,9 @@ checksum = "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
 
 [[package]]
 name = "liblzma-sys"
-version = "0.4.6"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a60851d15cd8c5346eca4ab8babff585be2ae4bc8097c067291d3ffe2add3b6"
+checksum = "a0dad045e4b1b7b170be4b60b54b780cafb4490165461bac7d1cf7b703f61d5f"
 dependencies = [
  "cc",
  "libc",
@@ -486,6 +486,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "perf-probe"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "liblzma-sys",
  "xz-core",
  "xz-sys",
@@ -985,6 +986,7 @@ name = "xz-sys"
 version = "0.4.6-rc.0"
 dependencies = [
  "libc",
+ "liblzma-sys",
  "xz-core",
 ]
 

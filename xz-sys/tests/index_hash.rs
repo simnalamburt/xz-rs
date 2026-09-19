@@ -7,11 +7,11 @@
 
 use std::ptr;
 
-use xz_core::types::{vli_ceil4, INDEX_INDICATOR, UNPADDED_SIZE_MAX, UNPADDED_SIZE_MIN};
+use xz_core::types::{INDEX_INDICATOR, UNPADDED_SIZE_MAX, UNPADDED_SIZE_MIN, vli_ceil4};
 use xz_sys::{
+    LZMA_BUF_ERROR, LZMA_DATA_ERROR, LZMA_OK, LZMA_PROG_ERROR, LZMA_STREAM_END, LZMA_VLI_MAX,
     lzma_crc32, lzma_index_hash, lzma_index_hash_append, lzma_index_hash_decode,
     lzma_index_hash_end, lzma_index_hash_init, lzma_index_hash_size, lzma_vli, lzma_vli_encode,
-    LZMA_BUF_ERROR, LZMA_DATA_ERROR, LZMA_OK, LZMA_PROG_ERROR, LZMA_STREAM_END, LZMA_VLI_MAX,
 };
 
 #[test]

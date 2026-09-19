@@ -1,0 +1,19 @@
+id: no-raw-deref-in-xz-sys
+language: rust
+severity: error
+message: Turn C pointers into references through c_ref/c_mut, not &*ptr
+note: The helpers make NULL panic under the extra-safety feature.
+files:
+  - xz-sys/src/**
+rule:
+  kind: reference_expression
+  has:
+    kind: unary_expression
+    regex: '^\*'
+  not:
+    inside:
+      kind: function_item
+      has:
+        field: name
+        regex: '^c_(ref|mut)$'
+      stopBy: end

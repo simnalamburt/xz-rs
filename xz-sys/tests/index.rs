@@ -6,21 +6,22 @@ use std::ptr;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use xz_core::types::{
-    vli_ceil4, LZMA_INDEX_ITER_ANY, LZMA_INDEX_ITER_BLOCK, LZMA_INDEX_ITER_NONEMPTY_BLOCK,
+    LZMA_INDEX_ITER_ANY, LZMA_INDEX_ITER_BLOCK, LZMA_INDEX_ITER_NONEMPTY_BLOCK,
     LZMA_INDEX_ITER_STREAM, UINT32_MAX, UINT64_MAX, UNPADDED_SIZE_MAX, UNPADDED_SIZE_MIN,
+    vli_ceil4,
 };
 use xz_sys::{
-    lzma_allocator, lzma_code, lzma_crc32, lzma_end, lzma_index, lzma_index_append,
-    lzma_index_block_count, lzma_index_buffer_decode, lzma_index_buffer_encode, lzma_index_cat,
-    lzma_index_checks, lzma_index_decoder, lzma_index_dup, lzma_index_encoder, lzma_index_end,
-    lzma_index_file_size, lzma_index_init, lzma_index_iter, lzma_index_iter_init,
-    lzma_index_iter_locate, lzma_index_iter_next, lzma_index_iter_rewind, lzma_index_memusage,
-    lzma_index_memused, lzma_index_size, lzma_index_stream_count, lzma_index_stream_flags,
-    lzma_index_stream_padding, lzma_index_stream_size, lzma_index_total_size,
-    lzma_index_uncompressed_size, lzma_ret, lzma_stream, lzma_stream_flags, lzma_vli,
-    lzma_vli_decode, LZMA_BACKWARD_SIZE_MIN, LZMA_BUF_ERROR, LZMA_CHECK_CRC32, LZMA_CHECK_CRC64,
-    LZMA_CHECK_NONE, LZMA_CHECK_SHA256, LZMA_DATA_ERROR, LZMA_FINISH, LZMA_MEMLIMIT_ERROR, LZMA_OK,
-    LZMA_PROG_ERROR, LZMA_STREAM_END, LZMA_STREAM_HEADER_SIZE, LZMA_VLI_MAX,
+    LZMA_BACKWARD_SIZE_MIN, LZMA_BUF_ERROR, LZMA_CHECK_CRC32, LZMA_CHECK_CRC64, LZMA_CHECK_NONE,
+    LZMA_CHECK_SHA256, LZMA_DATA_ERROR, LZMA_FINISH, LZMA_MEMLIMIT_ERROR, LZMA_OK, LZMA_PROG_ERROR,
+    LZMA_STREAM_END, LZMA_STREAM_HEADER_SIZE, LZMA_VLI_MAX, lzma_allocator, lzma_code, lzma_crc32,
+    lzma_end, lzma_index, lzma_index_append, lzma_index_block_count, lzma_index_buffer_decode,
+    lzma_index_buffer_encode, lzma_index_cat, lzma_index_checks, lzma_index_decoder,
+    lzma_index_dup, lzma_index_encoder, lzma_index_end, lzma_index_file_size, lzma_index_init,
+    lzma_index_iter, lzma_index_iter_init, lzma_index_iter_locate, lzma_index_iter_next,
+    lzma_index_iter_rewind, lzma_index_memusage, lzma_index_memused, lzma_index_size,
+    lzma_index_stream_count, lzma_index_stream_flags, lzma_index_stream_padding,
+    lzma_index_stream_size, lzma_index_total_size, lzma_index_uncompressed_size, lzma_ret,
+    lzma_stream, lzma_stream_flags, lzma_vli, lzma_vli_decode,
 };
 
 const MEMLIMIT: u64 = 1 << 20;

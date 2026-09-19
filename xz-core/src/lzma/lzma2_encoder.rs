@@ -42,7 +42,7 @@ unsafe fn mf_read(
             .buffer
             .offset((*mf).read_pos as isize)
             .offset(-(*left as isize)) as *const u8,
-        out.offset(*out_pos as isize) as *mut u8,
+        out.add(*out_pos) as *mut u8,
         copy_size,
     );
     *out_pos += copy_size;
@@ -83,7 +83,7 @@ unsafe fn lzma2_header_lzma(coder: *mut lzma_lzma2_coder) {
     if (*coder).need_properties {
         lzma_lzma_lclppb_encode(
             ::core::ptr::addr_of_mut!((*coder).opt_cur),
-            (::core::ptr::addr_of_mut!((*coder).buf) as *mut u8).offset(pos as isize),
+            (::core::ptr::addr_of_mut!((*coder).buf) as *mut u8).add(pos),
         );
     }
     (*coder).need_properties = false;
@@ -115,7 +115,7 @@ unsafe fn lzma2_encode(
             0 => {
                 if mf_unencoded(mf) == 0 {
                     if (*mf).action == LZMA_FINISH {
-                        *out.offset(*out_pos as isize) = 0;
+                        *out.add(*out_pos) = 0;
                         *out_pos += 1;
                     }
                     return if (*mf).action == LZMA_RUN {

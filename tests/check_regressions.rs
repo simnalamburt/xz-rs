@@ -2,8 +2,8 @@
 
 use std::mem::MaybeUninit;
 
-use xz_core::check::crc32_fast::lzma_crc32;
-use xz_core::check::crc64_fast::lzma_crc64;
+use xz_core::check::crc32_fast::crc32;
+use xz_core::check::crc64_fast::crc64;
 use xz_core::types::{
     lzma_check_finish, lzma_check_init, lzma_check_size, lzma_check_state, lzma_check_update,
     LZMA_CHECK_CRC32, LZMA_CHECK_CRC64, LZMA_CHECK_SHA256,
@@ -21,13 +21,8 @@ unsafe fn finish_check(check_type: u32, input: &[u8]) -> lzma_check_state {
 fn crc_functions_match_standard_check_vectors() {
     let input = b"123456789";
 
-    unsafe {
-        assert_eq!(lzma_crc32(input.as_ptr(), input.len(), 0), 0xcbf4_3926);
-        assert_eq!(
-            lzma_crc64(input.as_ptr(), input.len(), 0),
-            0x995d_c9bb_df19_39fa
-        );
-    }
+    assert_eq!(crc32(input, 0), 0xcbf4_3926);
+    assert_eq!(crc64(input, 0), 0x995d_c9bb_df19_39fa);
 }
 
 #[test]

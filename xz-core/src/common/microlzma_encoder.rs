@@ -49,7 +49,7 @@ unsafe fn microlzma_encode(
         }
         return ret;
     }
-    *out.offset(out_start as isize) = !(*coder).props;
+    *out.add(out_start) = !(*coder).props;
     *in_pos = in_start + uncomp_size as size_t;
     ret
 }
@@ -165,7 +165,7 @@ unsafe fn microlzma_encoder_init(
     )
 }
 pub unsafe fn lzma_microlzma_encoder(
-    strm: *mut lzma_stream,
+    strm: &mut lzma_stream,
     options: *const lzma_options_lzma,
 ) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
