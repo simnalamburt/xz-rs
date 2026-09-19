@@ -1,6 +1,6 @@
 use crate::types::*;
 pub unsafe fn lzma_block_buffer_decode(
-    block: *mut lzma_block,
+    block: &mut lzma_block,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,

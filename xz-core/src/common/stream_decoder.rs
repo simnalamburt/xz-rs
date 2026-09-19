@@ -150,7 +150,7 @@ unsafe fn stream_decode(
                         lzma_block_decoder_init(
                             ::core::ptr::addr_of_mut!((*coder).block_decoder),
                             allocator,
-                            ::core::ptr::addr_of_mut!((*coder).block_options),
+                            &mut (*coder).block_options,
                         )
                     }
                 };
@@ -184,7 +184,7 @@ unsafe fn stream_decode(
 
                 let ret: lzma_ret = lzma_index_hash_append(
                     (*coder).index_hash,
-                    lzma_block_unpadded_size(::core::ptr::addr_of_mut!((*coder).block_options)),
+                    lzma_block_unpadded_size(&(*coder).block_options),
                     (*coder).block_options.uncompressed_size,
                 );
                 if ret != LZMA_OK {

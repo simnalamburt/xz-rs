@@ -101,7 +101,7 @@ pub unsafe fn lzma_stream_buffer_encode(
     };
     if in_size > 0 {
         let ret: lzma_ret = lzma_block_buffer_encode(
-            ::core::ptr::addr_of_mut!(block),
+            &mut block,
             allocator,
             input,
             in_size,
@@ -122,7 +122,7 @@ pub unsafe fn lzma_stream_buffer_encode(
         ret = lzma_index_append(
             i,
             allocator,
-            lzma_block_unpadded_size(::core::ptr::addr_of_mut!(block)),
+            lzma_block_unpadded_size(&block),
             block.uncompressed_size,
         );
     }

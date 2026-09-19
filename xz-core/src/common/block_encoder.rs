@@ -134,35 +134,32 @@ unsafe fn block_encoder_update(
 pub(crate) unsafe fn lzma_block_encoder_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
-    block: *mut lzma_block,
+    block: &mut lzma_block,
 ) -> lzma_ret {
     if core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *mut lzma_block) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &mut lzma_block) -> lzma_ret>,
         uintptr_t,
     >(Some(
         lzma_block_encoder_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *mut lzma_block) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &mut lzma_block) -> lzma_ret,
     )) != (*next).init
     {
         lzma_next_end(next, allocator);
     }
     (*next).init = core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *mut lzma_block) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &mut lzma_block) -> lzma_ret>,
         uintptr_t,
     >(Some(
         lzma_block_encoder_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *mut lzma_block) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &mut lzma_block) -> lzma_ret,
     ));
-    if block.is_null() {
-        return LZMA_PROG_ERROR;
-    }
-    if (*block).version > 1 {
+    if block.version > 1 {
         return LZMA_OPTIONS_ERROR;
     }
-    if (*block).check as c_uint > LZMA_CHECK_ID_MAX as c_uint {
+    if block.check as c_uint > LZMA_CHECK_ID_MAX as c_uint {
         return LZMA_PROG_ERROR;
     }
-    if lzma_check_is_supported((*block).check) == 0 {
+    if lzma_check_is_supported(block.check) == 0 {
         return LZMA_UNSUPPORTED_CHECK;
     }
     let mut coder: *mut lzma_block_coder = (*next).coder as *mut lzma_block_coder;
@@ -211,18 +208,18 @@ pub(crate) unsafe fn lzma_block_encoder_init(
         };
     }
     (*coder).sequence = SEQ_CODE;
-    (*coder).block = block;
+    (*coder).block = block as *mut lzma_block;
     (*coder).compressed_size = 0;
     (*coder).uncompressed_size = 0;
     (*coder).pos = 0;
-    lzma_check_init(::core::ptr::addr_of_mut!((*coder).check), (*block).check);
+    lzma_check_init(::core::ptr::addr_of_mut!((*coder).check), block.check);
     lzma_raw_encoder_init(
         ::core::ptr::addr_of_mut!((*coder).next),
         allocator,
-        (*block).filters,
+        block.filters,
     )
 }
-pub unsafe fn lzma_block_encoder(strm: &mut lzma_stream, block: *mut lzma_block) -> lzma_ret {
+pub unsafe fn lzma_block_encoder(strm: &mut lzma_stream, block: &mut lzma_block) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;

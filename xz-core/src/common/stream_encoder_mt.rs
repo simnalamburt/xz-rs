@@ -151,7 +151,7 @@ unsafe fn worker_encode(
     ret = lzma_block_encoder_init(
         ::core::ptr::addr_of_mut!((*thr).block_encoder),
         worker_allocator(thr),
-        ::core::ptr::addr_of_mut!((*thr).block_options),
+        &mut (*thr).block_options,
     );
     if ret != LZMA_OK {
         worker_error(thr, ret);
@@ -267,7 +267,7 @@ unsafe fn worker_encode(
             }
             *out_pos = 0;
             ret = lzma_block_uncomp_encode(
-                ::core::ptr::addr_of_mut!((*thr).block_options),
+                &mut (*thr).block_options,
                 (*thr).in_0,
                 in_size,
                 ::core::ptr::addr_of_mut!((*(*thr).outbuf).buf) as *mut u8,
@@ -284,8 +284,7 @@ unsafe fn worker_encode(
             return THR_STOP;
         }
     }
-    (*(*thr).outbuf).unpadded_size =
-        lzma_block_unpadded_size(::core::ptr::addr_of_mut!((*thr).block_options));
+    (*(*thr).outbuf).unpadded_size = lzma_block_unpadded_size(&(*thr).block_options);
     (*(*thr).outbuf).uncompressed_size = (*thr).block_options.uncompressed_size;
     THR_FINISH
 }

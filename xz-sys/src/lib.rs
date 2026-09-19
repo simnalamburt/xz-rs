@@ -1004,17 +1004,21 @@ pub unsafe extern "C" fn lzma_block_compressed_size(
     block: *mut lzma_block,
     unpadded_size: lzma_vli,
 ) -> lzma_ret {
-    xz_core::common::block_util::lzma_block_compressed_size(block.cast(), unpadded_size)
+    xz_core::common::block_util::lzma_block_compressed_size(c_mut(block.cast()), unpadded_size)
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lzma_block_unpadded_size(block: *const lzma_block) -> lzma_vli {
-    xz_core::common::block_util::lzma_block_unpadded_size(block.cast())
+    // C returns 0 for a NULL block; xz-core takes a reference.
+    if block.is_null() {
+        return 0;
+    }
+    xz_core::common::block_util::lzma_block_unpadded_size(c_ref(block.cast()))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lzma_block_total_size(block: *const lzma_block) -> lzma_vli {
-    xz_core::common::block_util::lzma_block_total_size(block.cast())
+    xz_core::common::block_util::lzma_block_total_size(c_ref(block.cast()))
 }
 
 #[unsafe(no_mangle)]
@@ -1025,7 +1029,11 @@ pub unsafe extern "C" fn lzma_block_encoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::block_encoder::lzma_block_encoder(strm, block.cast())
+    // C's lzma_block_encoder_init returns LZMA_PROG_ERROR for a NULL block.
+    if block.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::block_encoder::lzma_block_encoder(strm, c_mut(block.cast()))
 }
 
 #[unsafe(no_mangle)]
@@ -1036,7 +1044,7 @@ pub unsafe extern "C" fn lzma_block_decoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::block_decoder::lzma_block_decoder(strm, block.cast())
+    xz_core::common::block_decoder::lzma_block_decoder(strm, c_mut(block.cast()))
 }
 
 #[unsafe(no_mangle)]
@@ -1054,8 +1062,12 @@ pub unsafe extern "C" fn lzma_block_buffer_encode(
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
+    // C tests `block == NULL` first and returns LZMA_PROG_ERROR.
+    if block.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::block_buffer_encoder::lzma_block_buffer_encode(
-        block.cast(),
+        c_mut(block.cast()),
         normalize_c_allocator(allocator).cast(),
         input,
         in_size,
@@ -1074,8 +1086,12 @@ pub unsafe extern "C" fn lzma_block_uncomp_encode(
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
+    // Same first-check as lzma_block_buffer_encode: NULL block is LZMA_PROG_ERROR.
+    if block.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::block_buffer_encoder::lzma_block_uncomp_encode(
-        block.cast(),
+        c_mut(block.cast()),
         input,
         in_size,
         out,
@@ -1096,7 +1112,7 @@ pub unsafe extern "C" fn lzma_block_buffer_decode(
     out_size: size_t,
 ) -> lzma_ret {
     xz_core::common::block_buffer_decoder::lzma_block_buffer_decode(
-        block.cast(),
+        c_mut(block.cast()),
         normalize_c_allocator(allocator).cast(),
         input,
         in_pos,

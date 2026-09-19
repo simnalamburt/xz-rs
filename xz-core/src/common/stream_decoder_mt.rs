@@ -681,7 +681,7 @@ unsafe fn stream_decode_mt_block_init(
     (*coder).mem_direct_mode = 0;
     let ret: lzma_ret = lzma_index_hash_append(
         (*coder).index_hash,
-        lzma_block_unpadded_size(::core::ptr::addr_of_mut!((*coder).block_options)),
+        lzma_block_unpadded_size(&(*coder).block_options),
         (*coder).block_options.uncompressed_size,
     );
     if ret != LZMA_OK {
@@ -802,7 +802,7 @@ unsafe fn stream_decode_mt_thread_init(
     ret = lzma_block_decoder_init(
         ::core::ptr::addr_of_mut!((*(*coder).thr).block_decoder),
         allocator,
-        ::core::ptr::addr_of_mut!((*(*coder).thr).block_options),
+        &mut (*(*coder).thr).block_options,
     );
     lzma_filters_free(
         ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
@@ -962,7 +962,7 @@ unsafe fn stream_decode_mt(
                 let ret_3: lzma_ret = lzma_block_decoder_init(
                     ::core::ptr::addr_of_mut!((*coder).block_decoder),
                     allocator,
-                    ::core::ptr::addr_of_mut!((*coder).block_options),
+                    &mut (*coder).block_options,
                 );
                 lzma_filters_free(
                     ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
@@ -1058,7 +1058,7 @@ unsafe fn stream_decode_mt(
                 }
                 let ret__4: lzma_ret = lzma_index_hash_append(
                     (*coder).index_hash,
-                    lzma_block_unpadded_size(::core::ptr::addr_of_mut!((*coder).block_options)),
+                    lzma_block_unpadded_size(&(*coder).block_options),
                     (*coder).block_options.uncompressed_size,
                 );
                 if ret__4 != LZMA_OK {

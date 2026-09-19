@@ -39,7 +39,7 @@ unsafe fn block_encoder_init(
     lzma_block_encoder_init(
         ::core::ptr::addr_of_mut!((*coder).block_encoder),
         allocator,
-        ::core::ptr::addr_of_mut!((*coder).block_options),
+        &mut (*coder).block_options,
     )
 }
 unsafe fn stream_encode(
@@ -139,8 +139,7 @@ unsafe fn stream_encode(
                     return ret;
                 }
                 let unpadded_size: lzma_vli =
-                    lzma_block_unpadded_size(::core::ptr::addr_of_mut!((*coder).block_options))
-                        as lzma_vli;
+                    lzma_block_unpadded_size(&(*coder).block_options) as lzma_vli;
                 let ret__1: lzma_ret = lzma_index_append(
                     (*coder).index,
                     allocator,
