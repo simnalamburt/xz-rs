@@ -1050,9 +1050,10 @@ pub unsafe extern "C" fn lzma_block_encoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    // C's lzma_block_encoder_init returns LZMA_PROG_ERROR for a NULL block.
+    // C's lzma_block_encoder_init returns LZMA_PROG_ERROR for a NULL block, after
+    // lzma_next_strm_init has already initialised the stream.
     if block.is_null() {
-        return LZMA_PROG_ERROR;
+        return xz_core::common::common::lzma_strm_init_failed(strm);
     }
     xz_core::common::block_encoder::lzma_block_encoder(strm, c_mut(block.cast()))
 }
@@ -1065,10 +1066,11 @@ pub unsafe extern "C" fn lzma_block_decoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    // C's lzma_block_decoder_init validates through lzma_block_unpadded_size,
-    // which answers 0 for a NULL block, so a NULL block is LZMA_PROG_ERROR.
+    // C's lzma_block_decoder_init validates through lzma_block_unpadded_size, which
+    // answers 0 for a NULL block, so a NULL block is LZMA_PROG_ERROR. It runs after
+    // lzma_next_strm_init has already initialised the stream.
     if block.is_null() {
-        return LZMA_PROG_ERROR;
+        return xz_core::common::common::lzma_strm_init_failed(strm);
     }
     xz_core::common::block_decoder::lzma_block_decoder(strm, c_mut(block.cast()))
 }
@@ -1306,9 +1308,10 @@ pub unsafe extern "C" fn lzma_index_encoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    // C's lzma_index_encoder_init returns LZMA_PROG_ERROR for a NULL index.
+    // C's lzma_index_encoder_init returns LZMA_PROG_ERROR for a NULL index, after
+    // lzma_next_strm_init has already initialised the stream.
     if i.is_null() {
-        return LZMA_PROG_ERROR;
+        return xz_core::common::common::lzma_strm_init_failed(strm);
     }
     xz_core::common::index_encoder::lzma_index_encoder(strm, c_ref(i.cast()))
 }
@@ -1329,7 +1332,7 @@ pub unsafe extern "C" fn lzma_index_decoder(
         return LZMA_PROG_ERROR;
     };
     if i.is_null() {
-        return LZMA_PROG_ERROR;
+        return xz_core::common::common::lzma_strm_init_failed(strm);
     }
     xz_core::common::index_decoder::lzma_index_decoder(strm, c_mut(i.cast()), memlimit)
 }
@@ -1558,9 +1561,10 @@ pub unsafe extern "C" fn lzma_file_info_decoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    // C's lzma_file_info_decoder_init returns LZMA_PROG_ERROR for a NULL dest_index.
+    // C's lzma_file_info_decoder_init returns LZMA_PROG_ERROR for a NULL dest_index,
+    // after lzma_next_strm_init has already initialised the stream.
     if i.is_null() {
-        return LZMA_PROG_ERROR;
+        return xz_core::common::common::lzma_strm_init_failed(strm);
     }
     xz_core::common::file_info::lzma_file_info_decoder(strm, c_mut(i.cast()), memlimit, file_size)
 }
@@ -1580,9 +1584,10 @@ pub unsafe extern "C" fn lzma_stream_encoder_mt(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    // C's get_options returns LZMA_PROG_ERROR for a NULL options.
+    // C's get_options returns LZMA_PROG_ERROR for a NULL options, from inside the init
+    // function lzma_next_strm_init calls once the stream is initialised.
     if options.is_null() {
-        return LZMA_PROG_ERROR;
+        return xz_core::common::common::lzma_strm_init_failed(strm);
     }
     xz_core::common::stream_mt::lzma_stream_encoder_mt(strm, c_ref(options.cast()))
 }
