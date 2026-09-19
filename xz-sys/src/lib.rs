@@ -85,6 +85,21 @@ unsafe fn c_stream<'a>(strm: *mut lzma_stream) -> Option<&'a mut lzma_stream> {
     Some(strm)
 }
 
+/// What C leaves behind when a coder's init function rejects an argument. The
+/// `lzma_next_strm_init` macro runs `lzma_strm_init` first and `lzma_end` on
+/// failure, so the stream is initialised and ended again, its totals reset and
+/// its coder freed, before `LZMA_PROG_ERROR` reaches the caller. A wrapper here
+/// that answers the argument itself never reaches the init function, so it ends
+/// the stream through this instead of returning the error directly.
+unsafe fn strm_init_failed(strm: &mut lzma_stream) -> lzma_ret {
+    let ret = unsafe { xz_core::common::common::lzma_strm_init(strm) };
+    if ret != LZMA_OK {
+        return ret;
+    }
+    unsafe { xz_core::common::common::lzma_end(strm) };
+    LZMA_PROG_ERROR
+}
+
 /// Turns a pointer the C API never NULL-tests into a reference. Without
 /// `extra-safety` this is the same unchecked dereference C performs. With it,
 /// NULL panics, which aborts across the C ABI instead of being undefined.
@@ -1053,7 +1068,7 @@ pub unsafe extern "C" fn lzma_block_encoder(
     // C's lzma_block_encoder_init returns LZMA_PROG_ERROR for a NULL block, after
     // lzma_next_strm_init has already initialised the stream.
     if block.is_null() {
-        return xz_core::common::common::lzma_strm_init_failed(strm);
+        return strm_init_failed(strm);
     }
     xz_core::common::block_encoder::lzma_block_encoder(strm, c_mut(block.cast()))
 }
@@ -1070,7 +1085,7 @@ pub unsafe extern "C" fn lzma_block_decoder(
     // answers 0 for a NULL block, so a NULL block is LZMA_PROG_ERROR. It runs after
     // lzma_next_strm_init has already initialised the stream.
     if block.is_null() {
-        return xz_core::common::common::lzma_strm_init_failed(strm);
+        return strm_init_failed(strm);
     }
     xz_core::common::block_decoder::lzma_block_decoder(strm, c_mut(block.cast()))
 }
@@ -1311,7 +1326,7 @@ pub unsafe extern "C" fn lzma_index_encoder(
     // C's lzma_index_encoder_init returns LZMA_PROG_ERROR for a NULL index, after
     // lzma_next_strm_init has already initialised the stream.
     if i.is_null() {
-        return xz_core::common::common::lzma_strm_init_failed(strm);
+        return strm_init_failed(strm);
     }
     xz_core::common::index_encoder::lzma_index_encoder(strm, c_ref(i.cast()))
 }
@@ -1332,7 +1347,7 @@ pub unsafe extern "C" fn lzma_index_decoder(
         return LZMA_PROG_ERROR;
     };
     if i.is_null() {
-        return xz_core::common::common::lzma_strm_init_failed(strm);
+        return strm_init_failed(strm);
     }
     xz_core::common::index_decoder::lzma_index_decoder(strm, c_mut(i.cast()), memlimit)
 }
@@ -1564,7 +1579,7 @@ pub unsafe extern "C" fn lzma_file_info_decoder(
     // C's lzma_file_info_decoder_init returns LZMA_PROG_ERROR for a NULL dest_index,
     // after lzma_next_strm_init has already initialised the stream.
     if i.is_null() {
-        return xz_core::common::common::lzma_strm_init_failed(strm);
+        return strm_init_failed(strm);
     }
     xz_core::common::file_info::lzma_file_info_decoder(strm, c_mut(i.cast()), memlimit, file_size)
 }
@@ -1587,7 +1602,7 @@ pub unsafe extern "C" fn lzma_stream_encoder_mt(
     // C's get_options returns LZMA_PROG_ERROR for a NULL options, from inside the init
     // function lzma_next_strm_init calls once the stream is initialised.
     if options.is_null() {
-        return xz_core::common::common::lzma_strm_init_failed(strm);
+        return strm_init_failed(strm);
     }
     xz_core::common::stream_mt::lzma_stream_encoder_mt(strm, c_ref(options.cast()))
 }

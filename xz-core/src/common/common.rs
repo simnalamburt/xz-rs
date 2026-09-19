@@ -129,18 +129,6 @@ pub unsafe fn lzma_next_end(next: *mut lzma_next_coder, allocator: *const lzma_a
         set_out_limit: None,
     };
 }
-/// The observable part of C's `lzma_next_strm_init` when the coder's init function rejects its
-/// arguments: the stream is initialised and then ended again, and the answer is `LZMA_PROG_ERROR`.
-/// An init function that never runs still has to leave the stream in this state, so xz-sys calls
-/// this where it rejects an argument that C only rejects inside the init function.
-pub unsafe fn lzma_strm_init_failed(strm: &mut lzma_stream) -> lzma_ret {
-    let ret = lzma_strm_init(strm);
-    if ret != LZMA_OK {
-        return ret;
-    }
-    lzma_end(strm);
-    LZMA_PROG_ERROR
-}
 pub unsafe fn lzma_strm_init(strm: &mut lzma_stream) -> lzma_ret {
     if (*strm).internal.is_null() {
         (*strm).internal = lzma_alloc_object::<lzma_internal>(lzma_stream_allocator(strm));
