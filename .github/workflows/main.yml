@@ -132,7 +132,7 @@ jobs:
         cache-targets: "false"
         save-if: ${{ github.event_name != 'pull_request' }}
     - name: Install cargo-fuzz
-      run: cargo install cargo-fuzz --version 0.13.1
+      run: cargo install cargo-fuzz --version 0.13.2
     - name: Run fuzz smoke targets
       run: FUZZ_RUNS=4096 FUZZ_SANITIZER=address scripts/run_fuzz_smoke.sh
 
