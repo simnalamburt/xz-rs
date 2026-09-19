@@ -22,7 +22,7 @@ fn is_size_valid(size: lzma_vli, reference: lzma_vli) -> bool {
     reference == LZMA_VLI_UNKNOWN || reference == size
 }
 unsafe fn block_decode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_block_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -32,31 +32,30 @@ unsafe fn block_decode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_block_coder = coder_ptr as *mut lzma_block_coder;
-    match (*coder).sequence {
+    match coder.sequence {
         0 => {
             let in_start: size_t = *in_pos;
             let out_start: size_t = *out_pos;
             let in_stop: size_t = *in_pos
                 + (if ((in_size - *in_pos) as lzma_vli)
-                    < (*coder).compressed_limit - (*coder).compressed_size
+                    < coder.compressed_limit - coder.compressed_size
                 {
                     (in_size - *in_pos) as lzma_vli
                 } else {
-                    (*coder).compressed_limit - (*coder).compressed_size
+                    coder.compressed_limit - coder.compressed_size
                 }) as size_t;
             let out_stop: size_t = *out_pos
                 + (if ((out_size - *out_pos) as lzma_vli)
-                    < (*coder).uncompressed_limit - (*coder).uncompressed_size
+                    < coder.uncompressed_limit - coder.uncompressed_size
                 {
                     (out_size - *out_pos) as lzma_vli
                 } else {
-                    (*coder).uncompressed_limit - (*coder).uncompressed_size
+                    coder.uncompressed_limit - coder.uncompressed_size
                 }) as size_t;
-            debug_assert!((*coder).next.code.is_some());
-            let code = (*coder).next.code.unwrap_unchecked();
+            debug_assert!(coder.next.code.is_some());
+            let code = coder.next.code.unwrap_unchecked();
             let ret: lzma_ret = code(
-                (*coder).next.coder,
+                coder.next.coder,
                 allocator,
                 input,
                 in_pos,
@@ -68,12 +67,11 @@ unsafe fn block_decode(
             );
             let in_used: size_t = *in_pos - in_start;
             let out_used: size_t = *out_pos - out_start;
-            (*coder).compressed_size += in_used as lzma_vli;
-            (*coder).uncompressed_size += out_used as lzma_vli;
+            coder.compressed_size += in_used as lzma_vli;
+            coder.uncompressed_size += out_used as lzma_vli;
             if ret == LZMA_OK {
-                let comp_done: bool = (*coder).compressed_size == (*(*coder).block).compressed_size;
-                let uncomp_done: bool =
-                    (*coder).uncompressed_size == (*(*coder).block).uncompressed_size;
+                let comp_done: bool = coder.compressed_size == (*coder.block).compressed_size;
+                let uncomp_done: bool = coder.uncompressed_size == (*coder.block).uncompressed_size;
                 if comp_done && uncomp_done {
                     return LZMA_DATA_ERROR;
                 }
@@ -84,10 +82,10 @@ unsafe fn block_decode(
                     return LZMA_DATA_ERROR;
                 }
             }
-            if !(*coder).ignore_check && out_used > 0 {
+            if !coder.ignore_check && out_used > 0 {
                 lzma_check_update(
-                    ::core::ptr::addr_of_mut!((*coder).check),
-                    (*(*coder).block).check,
+                    ::core::ptr::addr_of_mut!(coder.check),
+                    (*coder.block).check,
                     out.add(out_start),
                     out_used,
                 );
@@ -95,61 +93,55 @@ unsafe fn block_decode(
             if ret != LZMA_STREAM_END {
                 return ret;
             }
-            if !is_size_valid((*coder).compressed_size, (*(*coder).block).compressed_size)
-                || !is_size_valid(
-                    (*coder).uncompressed_size,
-                    (*(*coder).block).uncompressed_size,
-                )
+            if !is_size_valid(coder.compressed_size, (*coder.block).compressed_size)
+                || !is_size_valid(coder.uncompressed_size, (*coder.block).uncompressed_size)
             {
                 return LZMA_DATA_ERROR;
             }
-            (*(*coder).block).compressed_size = (*coder).compressed_size;
-            (*(*coder).block).uncompressed_size = (*coder).uncompressed_size;
-            (*coder).sequence = SEQ_PADDING;
+            (*coder.block).compressed_size = coder.compressed_size;
+            (*coder.block).uncompressed_size = coder.uncompressed_size;
+            coder.sequence = SEQ_PADDING;
         }
         1 | 2 => {}
         _ => return LZMA_PROG_ERROR,
     }
-    if (*coder).sequence != SEQ_CHECK {
-        while (*coder).compressed_size & 3 != 0 {
+    if coder.sequence != SEQ_CHECK {
+        while coder.compressed_size & 3 != 0 {
             if *in_pos >= in_size {
                 return LZMA_OK;
             }
-            (*coder).compressed_size += 1;
+            coder.compressed_size += 1;
             let byte = *input.add(*in_pos);
             *in_pos += 1;
             if byte != 0 {
                 return LZMA_DATA_ERROR;
             }
         }
-        if (*(*coder).block).check == LZMA_CHECK_NONE {
+        if (*coder.block).check == LZMA_CHECK_NONE {
             return LZMA_STREAM_END;
         }
-        if !(*coder).ignore_check {
-            lzma_check_finish(
-                ::core::ptr::addr_of_mut!((*coder).check),
-                (*(*coder).block).check,
-            );
+        if !coder.ignore_check {
+            lzma_check_finish(::core::ptr::addr_of_mut!(coder.check), (*coder.block).check);
         }
-        (*coder).sequence = SEQ_CHECK;
+        coder.sequence = SEQ_CHECK;
     }
-    let check_size: size_t = lzma_check_size((*(*coder).block).check) as size_t;
+    let check_size: size_t = lzma_check_size((*coder.block).check) as size_t;
     lzma_bufcpy(
         input,
         in_pos,
         in_size,
-        ::core::ptr::addr_of_mut!((*(*coder).block).raw_check) as *mut u8,
-        ::core::ptr::addr_of_mut!((*coder).check_pos),
+        ::core::ptr::addr_of_mut!((*coder.block).raw_check) as *mut u8,
+        ::core::ptr::addr_of_mut!(coder.check_pos),
         check_size,
     );
-    if (*coder).check_pos < check_size {
+    if coder.check_pos < check_size {
         return LZMA_OK;
     }
-    if !(*coder).ignore_check
-        && lzma_check_is_supported((*(*coder).block).check) != 0
+    if !coder.ignore_check
+        && lzma_check_is_supported((*coder.block).check) != 0
         && memcmp(
-            ::core::ptr::addr_of_mut!((*(*coder).block).raw_check) as *const c_void,
-            ::core::ptr::addr_of_mut!((*coder).check.buffer.u8_0) as *const c_void,
+            ::core::ptr::addr_of_mut!((*coder.block).raw_check) as *const c_void,
+            ::core::ptr::addr_of_mut!(coder.check.buffer.u8_0) as *const c_void,
             check_size,
         ) != 0
     {
@@ -157,9 +149,8 @@ unsafe fn block_decode(
     }
     LZMA_STREAM_END
 }
-unsafe fn block_decoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_block_coder = coder_ptr as *mut lzma_block_coder;
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).next), allocator);
+unsafe fn block_decoder_end(coder: &mut lzma_block_coder, allocator: *const lzma_allocator) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.next), allocator);
     crate::alloc::internal_free(coder, allocator);
 }
 pub(crate) unsafe fn lzma_block_decoder_init(
@@ -196,22 +187,8 @@ pub(crate) unsafe fn lzma_block_decoder_init(
             return LZMA_MEM_ERROR;
         }
         (*next).coder = coder as *mut c_void;
-        (*next).code = Some(
-            block_decode
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const u8,
-                    *mut size_t,
-                    size_t,
-                    *mut u8,
-                    *mut size_t,
-                    size_t,
-                    lzma_action,
-                ) -> lzma_ret,
-        );
-        (*next).end =
-            Some(block_decoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
+        (*next).code = coder_code_fn!(block_decode, lzma_block_coder);
+        (*next).end = coder_end_fn!(block_decoder_end, lzma_block_coder);
         (*coder).next = lzma_next_coder_s {
             coder: core::ptr::null_mut(),
             id: LZMA_VLI_UNKNOWN,

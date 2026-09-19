@@ -110,7 +110,7 @@ unsafe fn decode_buffer(
     }
 }
 unsafe fn lz_decode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -120,76 +120,74 @@ unsafe fn lz_decode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_coder = coder_ptr as *mut lzma_coder;
-    if (*coder).next.code.is_none() {
+    if coder.next.code.is_none() {
         return decode_buffer(coder, input, in_pos, in_size, out, out_pos, out_size);
     }
     while *out_pos < out_size {
-        if !(*coder).next_finished && (*coder).temp.pos == (*coder).temp.size {
-            (*coder).temp.pos = 0;
-            (*coder).temp.size = 0;
-            debug_assert!((*coder).next.code.is_some());
-            let next_code = (*coder).next.code.unwrap_unchecked();
+        if !coder.next_finished && coder.temp.pos == coder.temp.size {
+            coder.temp.pos = 0;
+            coder.temp.size = 0;
+            debug_assert!(coder.next.code.is_some());
+            let next_code = coder.next.code.unwrap_unchecked();
             let ret: lzma_ret = next_code(
-                (*coder).next.coder,
+                coder.next.coder,
                 allocator,
                 input,
                 in_pos,
                 in_size,
-                ::core::ptr::addr_of_mut!((*coder).temp.buffer) as *mut u8,
-                ::core::ptr::addr_of_mut!((*coder).temp.size),
+                ::core::ptr::addr_of_mut!(coder.temp.buffer) as *mut u8,
+                ::core::ptr::addr_of_mut!(coder.temp.size),
                 LZMA_BUFFER_SIZE as size_t,
                 action,
             );
             if ret == LZMA_STREAM_END {
-                (*coder).next_finished = true;
-            } else if ret != LZMA_OK || (*coder).temp.size == 0 {
+                coder.next_finished = true;
+            } else if ret != LZMA_OK || coder.temp.size == 0 {
                 return ret;
             }
         }
-        if (*coder).this_finished {
-            if (*coder).temp.size != 0 {
+        if coder.this_finished {
+            if coder.temp.size != 0 {
                 return LZMA_DATA_ERROR;
             }
-            if (*coder).next_finished {
+            if coder.next_finished {
                 return LZMA_STREAM_END;
             }
             return LZMA_OK;
         }
         let ret: lzma_ret = decode_buffer(
             coder,
-            ::core::ptr::addr_of_mut!((*coder).temp.buffer) as *mut u8,
-            ::core::ptr::addr_of_mut!((*coder).temp.pos),
-            (*coder).temp.size,
+            ::core::ptr::addr_of_mut!(coder.temp.buffer) as *mut u8,
+            ::core::ptr::addr_of_mut!(coder.temp.pos),
+            coder.temp.size,
             out,
             out_pos,
             out_size,
         );
         if ret == LZMA_STREAM_END {
-            (*coder).this_finished = true;
+            coder.this_finished = true;
         } else if ret != LZMA_OK {
             return ret;
-        } else if (*coder).next_finished && *out_pos < out_size {
+        } else if coder.next_finished && *out_pos < out_size {
             return LZMA_DATA_ERROR;
         }
     }
     LZMA_OK
 }
-unsafe fn lz_decoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_coder = coder_ptr as *mut lzma_coder;
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).next), allocator);
+unsafe fn lz_decoder_end(coder: &mut lzma_coder, allocator: *const lzma_allocator) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.next), allocator);
     crate::alloc::internal_free_array(
-        (*coder).dict.buf,
-        (*coder).dict.size.wrapping_add(LZ_DICT_EXTRA as size_t),
+        coder.dict.buf,
+        coder.dict.size.wrapping_add(LZ_DICT_EXTRA as size_t),
         allocator,
     );
-    if let Some(end) = (*coder).lz.end {
-        end((*coder).lz.coder, allocator);
+    if let Some(end) = coder.lz.end {
+        end(coder.lz.coder, allocator);
     } else {
         #[cfg(feature = "custom_allocator")]
-        crate::alloc::internal_free_bytes((*coder).lz.coder, 0, allocator);
+        crate::alloc::internal_free_bytes(coder.lz.coder, 0, allocator);
         #[cfg(not(feature = "custom_allocator"))]
-        debug_assert!((*coder).lz.coder.is_null());
+        debug_assert!(coder.lz.coder.is_null());
     }
     crate::alloc::internal_free(coder, allocator);
 }
@@ -212,21 +210,8 @@ pub unsafe fn lzma_lz_decoder_init(
             return LZMA_MEM_ERROR;
         }
         (*next).coder = coder as *mut c_void;
-        (*next).code = Some(
-            lz_decode
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const u8,
-                    *mut size_t,
-                    size_t,
-                    *mut u8,
-                    *mut size_t,
-                    size_t,
-                    lzma_action,
-                ) -> lzma_ret,
-        );
-        (*next).end = Some(lz_decoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
+        (*next).code = coder_code_fn!(lz_decode, lzma_coder);
+        (*next).end = coder_end_fn!(lz_decoder_end, lzma_coder);
         (*coder).dict.buf = core::ptr::null_mut();
         (*coder).dict.size = 0;
         (*coder).lz = LZMA_LZ_DECODER_INIT;

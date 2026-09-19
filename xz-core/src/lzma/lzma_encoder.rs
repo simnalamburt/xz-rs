@@ -858,7 +858,7 @@ pub unsafe fn lzma_lzma_encode(
     finish_lzma_stream(coder, out, out_pos, out_size)
 }
 unsafe fn lzma_encode(
-    coder: *mut c_void,
+    coder: &mut lzma_lzma1_encoder,
     mf: *mut lzma_mf,
     out: *mut u8,
     out_pos: *mut size_t,
@@ -877,17 +877,16 @@ unsafe fn lzma_encode(
     )
 }
 unsafe fn lzma_lzma_set_out_limit(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_lzma1_encoder,
     uncomp_size: *mut u64,
     out_limit: u64,
 ) -> lzma_ret {
     if out_limit < 6 {
         return LZMA_BUF_ERROR;
     }
-    let coder: *mut lzma_lzma1_encoder = coder_ptr as *mut lzma_lzma1_encoder;
-    (*coder).out_limit = out_limit;
-    (*coder).uncomp_size_ptr = uncomp_size;
-    (*coder).use_eopm = false;
+    coder.out_limit = out_limit;
+    coder.uncomp_size_ptr = uncomp_size;
+    coder.use_eopm = false;
     LZMA_OK
 }
 fn is_options_valid(options: *const lzma_options_lzma) -> bool {
@@ -1083,8 +1082,8 @@ pub unsafe fn lzma_lzma_encoder_create(
     set_lz_options(lz_options, options);
     lzma_lzma_encoder_reset(coder, options)
 }
-unsafe fn lzma_encoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    crate::alloc::internal_free(coder_ptr as *mut lzma_lzma1_encoder, allocator);
+unsafe fn lzma_encoder_end(coder: &mut lzma_lzma1_encoder, allocator: *const lzma_allocator) {
+    crate::alloc::internal_free(coder as *mut lzma_lzma1_encoder, allocator);
 }
 unsafe fn lzma_encoder_init(
     lz: *mut lzma_lz_encoder,
@@ -1096,10 +1095,9 @@ unsafe fn lzma_encoder_init(
     if options.is_null() {
         return LZMA_PROG_ERROR;
     }
-    (*lz).code = lzma_encode as lzma_lz_encoder_code_function;
-    (*lz).end = Some(lzma_encoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
-    (*lz).set_out_limit =
-        Some(lzma_lzma_set_out_limit as unsafe fn(*mut c_void, *mut u64, u64) -> lzma_ret);
+    (*lz).code = lz_encoder_code_fn!(lzma_encode, lzma_lzma1_encoder);
+    (*lz).end = coder_end_fn!(lzma_encoder_end, lzma_lzma1_encoder);
+    (*lz).set_out_limit = coder_set_out_limit_fn!(lzma_lzma_set_out_limit, lzma_lzma1_encoder);
     lzma_lzma_encoder_create(
         ::core::ptr::addr_of_mut!((*lz).coder),
         allocator,

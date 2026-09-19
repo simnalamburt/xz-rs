@@ -894,7 +894,7 @@ unsafe fn stream_encode_mt_index(
 }
 
 unsafe fn stream_encode_mt(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_stream_coder,
     allocator: *const lzma_allocator,
     in_0: *const u8,
     in_pos: *mut size_t,
@@ -904,27 +904,26 @@ unsafe fn stream_encode_mt(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
-    match (*coder).sequence {
+    match coder.sequence {
         SEQ_STREAM_HEADER => {
             lzma_bufcpy(
-                ::core::ptr::addr_of_mut!((*coder).header) as *mut u8,
-                ::core::ptr::addr_of_mut!((*coder).header_pos),
+                ::core::ptr::addr_of_mut!(coder.header) as *mut u8,
+                ::core::ptr::addr_of_mut!(coder.header_pos),
                 core::mem::size_of::<[u8; 12]>(),
                 out,
                 out_pos,
                 out_size,
             );
-            if (*coder).header_pos < core::mem::size_of::<[u8; 12]>() {
+            if coder.header_pos < core::mem::size_of::<[u8; 12]>() {
                 return LZMA_OK;
             }
-            (*coder).header_pos = 0;
-            (*coder).sequence = SEQ_BLOCK;
+            coder.header_pos = 0;
+            coder.sequence = SEQ_BLOCK;
         }
         SEQ_BLOCK | SEQ_INDEX | SEQ_STREAM_FOOTER => {}
         _ => return LZMA_PROG_ERROR,
     }
-    if (*coder).sequence == SEQ_BLOCK {
+    if coder.sequence == SEQ_BLOCK {
         let ret: lzma_ret = stream_encode_mt_blocks(
             coder, allocator, in_0, in_pos, in_size, out, out_pos, out_size, action,
         );
@@ -933,61 +932,59 @@ unsafe fn stream_encode_mt(
         }
         // FullFlush/FullBarrier complete while staying in SEQ_BLOCK. Only
         // Finish advances to SEQ_INDEX and should fall through below.
-        if (*coder).sequence == SEQ_BLOCK {
+        if coder.sequence == SEQ_BLOCK {
             return LZMA_STREAM_END;
         }
     }
-    if (*coder).sequence == SEQ_INDEX {
+    if coder.sequence == SEQ_INDEX {
         let ret: lzma_ret = stream_encode_mt_index(coder, allocator, out, out_pos, out_size);
         if ret != LZMA_STREAM_END {
             return ret;
         }
     }
     lzma_bufcpy(
-        ::core::ptr::addr_of_mut!((*coder).header) as *mut u8,
-        ::core::ptr::addr_of_mut!((*coder).header_pos),
+        ::core::ptr::addr_of_mut!(coder.header) as *mut u8,
+        ::core::ptr::addr_of_mut!(coder.header_pos),
         core::mem::size_of::<[u8; 12]>(),
         out,
         out_pos,
         out_size,
     );
-    if (*coder).header_pos < core::mem::size_of::<[u8; 12]>() {
+    if coder.header_pos < core::mem::size_of::<[u8; 12]>() {
         LZMA_OK
     } else {
         LZMA_STREAM_END
     }
 }
-unsafe fn stream_encoder_mt_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
+unsafe fn stream_encoder_mt_end(coder: &mut lzma_stream_coder, allocator: *const lzma_allocator) {
     threads_end(coder, allocator);
-    lzma_outq_end(::core::ptr::addr_of_mut!((*coder).outq), allocator);
+    lzma_outq_end(::core::ptr::addr_of_mut!(coder.outq), allocator);
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters) as *mut lzma_filter,
         allocator,
     );
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters_cache) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters_cache) as *mut lzma_filter,
         allocator,
     );
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).index_encoder), allocator);
-    if !(*coder).index.is_null() {
-        lzma_index_end(&mut *(*coder).index, allocator);
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.index_encoder), allocator);
+    if !coder.index.is_null() {
+        lzma_index_end(&mut *coder.index, allocator);
     }
-    mythread_cond_destroy(::core::ptr::addr_of_mut!((*coder).cond));
-    mythread_mutex_destroy(::core::ptr::addr_of_mut!((*coder).mutex));
+    mythread_cond_destroy(::core::ptr::addr_of_mut!(coder.cond));
+    mythread_mutex_destroy(::core::ptr::addr_of_mut!(coder.mutex));
     crate::alloc::internal_free(coder, allocator);
 }
 unsafe fn stream_encoder_mt_update(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_stream_coder,
     allocator: *const lzma_allocator,
     filters: *const lzma_filter,
     _reversed_filters: *const lzma_filter,
 ) -> lzma_ret {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
-    if (*coder).sequence > SEQ_BLOCK {
+    if coder.sequence > SEQ_BLOCK {
         return LZMA_PROG_ERROR;
     }
-    if !(*coder).thr.is_null() {
+    if !coder.thr.is_null() {
         return LZMA_PROG_ERROR;
     }
     if lzma_raw_encoder_memusage(filters) == UINT64_MAX {
@@ -1006,16 +1003,16 @@ unsafe fn stream_encoder_mt_update(
         return ret_;
     }
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters) as *mut lzma_filter,
         allocator,
     );
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters_cache) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters_cache) as *mut lzma_filter,
         allocator,
     );
     core::ptr::copy_nonoverlapping(
         ::core::ptr::addr_of_mut!(temp) as *const u8,
-        ::core::ptr::addr_of_mut!((*coder).filters) as *mut u8,
+        ::core::ptr::addr_of_mut!(coder.filters) as *mut u8,
         core::mem::size_of::<[lzma_filter; 5]>(),
     );
     LZMA_OK
@@ -1052,40 +1049,39 @@ unsafe fn get_options(
     }
     LZMA_OK
 }
-unsafe fn get_progress(coder_ptr: *mut c_void, progress_in: &mut u64, progress_out: &mut u64) {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
+unsafe fn get_progress(
+    coder: &mut lzma_stream_coder,
+    progress_in: &mut u64,
+    progress_out: &mut u64,
+) {
     let mut mythread_i_1010: c_uint = 0;
     while if mythread_i_1010 != 0 {
-        mythread_mutex_unlock(::core::ptr::addr_of_mut!((*coder).mutex));
+        mythread_mutex_unlock(::core::ptr::addr_of_mut!(coder.mutex));
         0
     } else {
-        mythread_mutex_lock(::core::ptr::addr_of_mut!((*coder).mutex));
+        mythread_mutex_lock(::core::ptr::addr_of_mut!(coder.mutex));
         1
     } != 0
     {
         let mut mythread_j_1010: c_uint = 0;
         while mythread_j_1010 == 0 {
-            *progress_in = (*coder).progress_in;
-            *progress_out = (*coder).progress_out;
+            *progress_in = coder.progress_in;
+            *progress_out = coder.progress_out;
             let mut i: size_t = 0;
-            while i < (*coder).threads_initialized as size_t {
+            while i < coder.threads_initialized as size_t {
                 let mut mythread_i_1015: c_uint = 0;
                 while if mythread_i_1015 != 0 {
-                    mythread_mutex_unlock(::core::ptr::addr_of_mut!(
-                        (*(*coder).threads.add(i)).mutex
-                    ));
+                    mythread_mutex_unlock(::core::ptr::addr_of_mut!((*coder.threads.add(i)).mutex));
                     0
                 } else {
-                    mythread_mutex_lock(::core::ptr::addr_of_mut!(
-                        (*(*coder).threads.add(i)).mutex
-                    ));
+                    mythread_mutex_lock(::core::ptr::addr_of_mut!((*coder.threads.add(i)).mutex));
                     1
                 } != 0
                 {
                     let mut mythread_j_1015: c_uint = 0;
                     while mythread_j_1015 == 0 {
-                        *progress_in += (*(*coder).threads.add(i)).progress_in;
-                        *progress_out += (*(*coder).threads.add(i)).progress_out;
+                        *progress_in += (*coder.threads.add(i)).progress_in;
+                        *progress_out += (*coder.threads.add(i)).progress_out;
                         mythread_j_1015 = 1;
                     }
                     mythread_i_1015 = 1;
@@ -1118,31 +1114,10 @@ unsafe fn stream_encoder_mt_create_coder(
         (*next).coder = core::ptr::null_mut();
         return core::ptr::null_mut();
     }
-    (*next).code = Some(
-        stream_encode_mt
-            as unsafe fn(
-                *mut c_void,
-                *const lzma_allocator,
-                *const u8,
-                *mut size_t,
-                size_t,
-                *mut u8,
-                *mut size_t,
-                size_t,
-                lzma_action,
-            ) -> lzma_ret,
-    );
-    (*next).end = Some(stream_encoder_mt_end as unsafe fn(*mut c_void, *const lzma_allocator));
-    (*next).get_progress = Some(get_progress as unsafe fn(*mut c_void, &mut u64, &mut u64) -> ());
-    (*next).update = Some(
-        stream_encoder_mt_update
-            as unsafe fn(
-                *mut c_void,
-                *const lzma_allocator,
-                *const lzma_filter,
-                *const lzma_filter,
-            ) -> lzma_ret,
-    );
+    (*next).code = coder_code_fn!(stream_encode_mt, lzma_stream_coder);
+    (*next).end = coder_end_fn!(stream_encoder_mt_end, lzma_stream_coder);
+    (*next).get_progress = coder_get_progress_fn!(get_progress, lzma_stream_coder);
+    (*next).update = coder_update_fn!(stream_encoder_mt_update, lzma_stream_coder);
     (*coder).filters[0].id = LZMA_VLI_UNKNOWN;
     (*coder).filters_cache[0].id = LZMA_VLI_UNKNOWN;
     (*coder).index_encoder = lzma_next_coder_s {

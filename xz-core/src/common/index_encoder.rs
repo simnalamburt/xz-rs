@@ -18,7 +18,7 @@ pub const SEQ_UNPADDED: index_encoder_seq = 2;
 pub const SEQ_COUNT: index_encoder_seq = 1;
 pub const SEQ_INDICATOR: index_encoder_seq = 0;
 unsafe fn index_encode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_index_coder,
     _allocator: *const lzma_allocator,
     _in_0: *const u8,
     _in_pos: *mut size_t,
@@ -28,22 +28,21 @@ unsafe fn index_encode(
     out_size: size_t,
     _action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_index_coder = coder_ptr as *mut lzma_index_coder;
     let out_start: size_t = *out_pos;
     let mut ret: lzma_ret = LZMA_OK;
     while *out_pos < out_size {
-        match (*coder).sequence {
+        match coder.sequence {
             0 => {
                 *out.add(*out_pos) = INDEX_INDICATOR;
                 *out_pos += 1;
-                (*coder).sequence = SEQ_COUNT;
+                coder.sequence = SEQ_COUNT;
                 continue;
             }
             1 => {
-                let count: lzma_vli = lzma_index_block_count(c_ref((*coder).index)) as lzma_vli;
+                let count: lzma_vli = lzma_index_block_count(c_ref(coder.index)) as lzma_vli;
                 ret = lzma_vli_encode(
                     count,
-                    Some(&mut (*coder).pos),
+                    Some(&mut coder.pos),
                     c_slice_mut(out, out_size),
                     c_mut(out_pos),
                 );
@@ -51,44 +50,43 @@ unsafe fn index_encode(
                     break;
                 }
                 ret = LZMA_OK;
-                (*coder).pos = 0;
-                (*coder).sequence = SEQ_NEXT;
+                coder.pos = 0;
+                coder.sequence = SEQ_NEXT;
                 continue;
             }
             4 => {
-                if lzma_index_iter_next(&mut (*coder).iter, LZMA_INDEX_ITER_BLOCK) != 0 {
-                    (*coder).pos = lzma_index_padding_size(c_ref((*coder).index)) as size_t;
-                    (*coder).sequence = SEQ_PADDING;
+                if lzma_index_iter_next(&mut coder.iter, LZMA_INDEX_ITER_BLOCK) != 0 {
+                    coder.pos = lzma_index_padding_size(c_ref(coder.index)) as size_t;
+                    coder.sequence = SEQ_PADDING;
                     continue;
                 } else {
-                    (*coder).sequence = SEQ_UNPADDED;
+                    coder.sequence = SEQ_UNPADDED;
                 }
             }
             2 | 3 => {}
             5 => {
-                if (*coder).pos > 0 {
-                    (*coder).pos -= 1;
+                if coder.pos > 0 {
+                    coder.pos -= 1;
                     *out.add(*out_pos) = 0;
                     *out_pos += 1;
                     continue;
                 } else {
-                    (*coder).crc32 =
-                        lzma_crc32(out.add(out_start), *out_pos - out_start, (*coder).crc32);
-                    (*coder).sequence = SEQ_CRC32;
+                    coder.crc32 = lzma_crc32(out.add(out_start), *out_pos - out_start, coder.crc32);
+                    coder.sequence = SEQ_CRC32;
                 }
             }
             6 => {}
             _ => return LZMA_PROG_ERROR,
         }
-        if (*coder).sequence == SEQ_UNPADDED || (*coder).sequence == SEQ_UNCOMPRESSED {
-            let size: lzma_vli = if (*coder).sequence == SEQ_UNPADDED {
-                (*coder).iter.block.unpadded_size
+        if coder.sequence == SEQ_UNPADDED || coder.sequence == SEQ_UNCOMPRESSED {
+            let size: lzma_vli = if coder.sequence == SEQ_UNPADDED {
+                coder.iter.block.unpadded_size
             } else {
-                (*coder).iter.block.uncompressed_size
+                coder.iter.block.uncompressed_size
             };
             ret = lzma_vli_encode(
                 size,
-                Some(&mut (*coder).pos),
+                Some(&mut coder.pos),
                 c_slice_mut(out, out_size),
                 c_mut(out_pos),
             );
@@ -96,17 +94,17 @@ unsafe fn index_encode(
                 break;
             }
             ret = LZMA_OK;
-            (*coder).pos = 0;
-            (*coder).sequence += 1;
+            coder.pos = 0;
+            coder.sequence += 1;
         } else {
             loop {
                 if *out_pos == out_size {
                     return LZMA_OK;
                 }
-                *out.add(*out_pos) = ((*coder).crc32 >> ((*coder).pos * 8) & 0xff) as u8;
+                *out.add(*out_pos) = (coder.crc32 >> (coder.pos * 8) & 0xff) as u8;
                 *out_pos += 1;
-                (*coder).pos += 1;
-                if (*coder).pos >= 4 {
+                coder.pos += 1;
+                if coder.pos >= 4 {
                     break;
                 }
             }
@@ -115,7 +113,7 @@ unsafe fn index_encode(
     }
     let out_used: size_t = *out_pos - out_start;
     if out_used > 0 {
-        (*coder).crc32 = lzma_crc32(out.add(out_start), out_used, (*coder).crc32);
+        coder.crc32 = lzma_crc32(out.add(out_start), out_used, coder.crc32);
     }
     ret
 }
@@ -157,20 +155,7 @@ pub(crate) unsafe fn lzma_index_encoder_init(
         if (*next).coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).code = Some(
-            index_encode
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const u8,
-                    *mut size_t,
-                    size_t,
-                    *mut u8,
-                    *mut size_t,
-                    size_t,
-                    lzma_action,
-                ) -> lzma_ret,
-        );
+        (*next).code = coder_code_fn!(index_encode, lzma_index_coder);
         (*next).end =
             Some(index_encoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
     }
@@ -257,7 +242,7 @@ pub unsafe fn lzma_index_buffer_encode(
     index_encoder_reset(::core::ptr::addr_of_mut!(coder), i);
     let out_start: size_t = *out_pos;
     let mut ret: lzma_ret = index_encode(
-        ::core::ptr::addr_of_mut!(coder) as *mut c_void,
+        &mut coder,
         core::ptr::null(),
         core::ptr::null(),
         core::ptr::null_mut(),

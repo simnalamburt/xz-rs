@@ -12,7 +12,7 @@ pub const SEQ_CODE: alone_encoder_seq = 1;
 pub const SEQ_HEADER: alone_encoder_seq = 0;
 pub const ALONE_HEADER_SIZE: u32 = 1 + 4 + 8;
 unsafe fn alone_encode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_alone_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -22,28 +22,27 @@ unsafe fn alone_encode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_alone_coder = coder_ptr as *mut lzma_alone_coder;
     while *out_pos < out_size {
-        match (*coder).sequence {
+        match coder.sequence {
             0 => {
                 lzma_bufcpy(
-                    ::core::ptr::addr_of_mut!((*coder).header) as *mut u8,
-                    ::core::ptr::addr_of_mut!((*coder).header_pos),
+                    ::core::ptr::addr_of_mut!(coder.header) as *mut u8,
+                    ::core::ptr::addr_of_mut!(coder.header_pos),
                     ALONE_HEADER_SIZE as size_t,
                     out,
                     out_pos,
                     out_size,
                 );
-                if (*coder).header_pos < ALONE_HEADER_SIZE as size_t {
+                if coder.header_pos < ALONE_HEADER_SIZE as size_t {
                     return LZMA_OK;
                 }
-                (*coder).sequence = SEQ_CODE;
+                coder.sequence = SEQ_CODE;
             }
             1 => {
-                debug_assert!((*coder).next.code.is_some());
-                let code = (*coder).next.code.unwrap_unchecked();
+                debug_assert!(coder.next.code.is_some());
+                let code = coder.next.code.unwrap_unchecked();
                 return code(
-                    (*coder).next.coder,
+                    coder.next.coder,
                     allocator,
                     input,
                     in_pos,
@@ -59,9 +58,8 @@ unsafe fn alone_encode(
     }
     LZMA_OK
 }
-unsafe fn alone_encoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_alone_coder = coder_ptr as *mut lzma_alone_coder;
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).next), allocator);
+unsafe fn alone_encoder_end(coder: &mut lzma_alone_coder, allocator: *const lzma_allocator) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.next), allocator);
     crate::alloc::internal_free(coder, allocator);
 }
 unsafe fn alone_encoder_init(
@@ -105,22 +103,8 @@ unsafe fn alone_encoder_init(
             return LZMA_MEM_ERROR;
         }
         (*next).coder = coder as *mut c_void;
-        (*next).code = Some(
-            alone_encode
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const u8,
-                    *mut size_t,
-                    size_t,
-                    *mut u8,
-                    *mut size_t,
-                    size_t,
-                    lzma_action,
-                ) -> lzma_ret,
-        );
-        (*next).end =
-            Some(alone_encoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
+        (*next).code = coder_code_fn!(alone_encode, lzma_alone_coder);
+        (*next).end = coder_end_fn!(alone_encoder_end, lzma_alone_coder);
         (*coder).next = lzma_next_coder_s {
             coder: core::ptr::null_mut(),
             id: LZMA_VLI_UNKNOWN,
