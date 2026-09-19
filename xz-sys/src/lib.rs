@@ -1015,6 +1015,11 @@ pub unsafe extern "C" fn lzma_block_compressed_size(
     block: *mut lzma_block,
     unpadded_size: lzma_vli,
 ) -> lzma_ret {
+    // C validates through lzma_block_unpadded_size, which answers 0 for a NULL
+    // block, so a NULL block is LZMA_PROG_ERROR.
+    if block.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::block_util::lzma_block_compressed_size(c_mut(block.cast()), unpadded_size)
 }
 
@@ -1029,6 +1034,11 @@ pub unsafe extern "C" fn lzma_block_unpadded_size(block: *const lzma_block) -> l
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lzma_block_total_size(block: *const lzma_block) -> lzma_vli {
+    // C reads the size through lzma_block_unpadded_size, which answers 0 for a
+    // NULL block.
+    if block.is_null() {
+        return 0;
+    }
     xz_core::common::block_util::lzma_block_total_size(c_ref(block.cast()))
 }
 
@@ -1055,6 +1065,11 @@ pub unsafe extern "C" fn lzma_block_decoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
+    // C's lzma_block_decoder_init validates through lzma_block_unpadded_size,
+    // which answers 0 for a NULL block, so a NULL block is LZMA_PROG_ERROR.
+    if block.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::block_decoder::lzma_block_decoder(strm, c_mut(block.cast()))
 }
 
@@ -1122,6 +1137,12 @@ pub unsafe extern "C" fn lzma_block_buffer_decode(
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
+    // C reaches lzma_block_decoder_init, which rejects a NULL block through
+    // lzma_block_unpadded_size. Its own argument checks answer the same value,
+    // so testing the block first is not observable.
+    if block.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::block_buffer_decoder::lzma_block_buffer_decode(
         c_mut(block.cast()),
         normalize_c_allocator(allocator).cast(),
