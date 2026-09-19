@@ -18,7 +18,7 @@ fn decode_buffer(coder: &mut lzma_delta_coder, buffer: &mut [u8]) {
     coder.pos = pos;
 }
 unsafe fn delta_decode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_delta_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -28,7 +28,6 @@ unsafe fn delta_decode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: &mut lzma_delta_coder = &mut *(coder_ptr as *mut lzma_delta_coder);
     let out_start: size_t = *out_pos;
     debug_assert!(coder.next.code.is_some());
     let code = coder.next.code.unwrap_unchecked();
@@ -58,20 +57,7 @@ pub(crate) unsafe fn lzma_delta_decoder_init(
     allocator: *const lzma_allocator,
     filters: *const lzma_filter_info,
 ) -> lzma_ret {
-    (*next).code = Some(
-        delta_decode
-            as unsafe fn(
-                *mut c_void,
-                *const lzma_allocator,
-                *const u8,
-                *mut size_t,
-                size_t,
-                *mut u8,
-                *mut size_t,
-                size_t,
-                lzma_action,
-            ) -> lzma_ret,
-    );
+    (*next).code = coder_code_fn!(delta_decode, lzma_delta_coder);
     lzma_delta_coder_init(next, allocator, filters)
 }
 pub(crate) unsafe fn lzma_delta_props_decode(

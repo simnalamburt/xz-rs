@@ -1,8 +1,7 @@
 use crate::types::*;
-unsafe fn delta_coder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_delta_coder = coder_ptr as *mut lzma_delta_coder;
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).next), allocator);
-    crate::alloc::internal_free(coder, allocator);
+unsafe fn delta_coder_end(coder: &mut lzma_delta_coder, allocator: *const lzma_allocator) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.next), allocator);
+    crate::alloc::internal_free(coder as *mut lzma_delta_coder, allocator);
 }
 pub unsafe fn lzma_delta_coder_init(
     next: *mut lzma_next_coder,
@@ -16,7 +15,7 @@ pub unsafe fn lzma_delta_coder_init(
             return LZMA_MEM_ERROR;
         }
         (*next).coder = coder as *mut c_void;
-        (*next).end = Some(delta_coder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
+        (*next).end = coder_end_fn!(delta_coder_end, lzma_delta_coder);
         (*coder).next = lzma_next_coder_s {
             coder: core::ptr::null_mut(),
             id: LZMA_VLI_UNKNOWN,
