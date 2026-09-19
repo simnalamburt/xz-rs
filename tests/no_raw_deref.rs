@@ -1,3 +1,6 @@
+// The test reads src/ from disk, which wasm targets cannot do.
+#![cfg(not(target_family = "wasm"))]
+
 //! `&*ptr` and `&mut *ptr` turn a C pointer into a reference with no NULL
 //! test, which is exactly what the `extra-safety` feature exists to catch. No
 //! clippy lint rejects the pattern, so this test scans the source instead.
