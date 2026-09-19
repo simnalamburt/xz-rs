@@ -567,6 +567,9 @@ pub fn crc32(buf: &[u8], crc: u32) -> u32 {
 /// buffer-and-size pair. [`crc32`] is the form this crate offers outside it;
 /// the C ABI entry point lives in `xz-sys`.
 ///
+/// TODO: remove once the coder `code` functions take their buffers as
+/// slices; every caller then has a slice and calls [`crc32`] directly.
+///
 /// # Safety
 /// `buf` must be readable for `size` bytes, or `size` must be zero.
 pub(crate) unsafe fn lzma_crc32(buf: *const u8, size: size_t, crc: u32) -> u32 {

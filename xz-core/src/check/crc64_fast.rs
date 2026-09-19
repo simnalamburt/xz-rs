@@ -1112,6 +1112,9 @@ pub fn crc64(buf: &[u8], crc: u64) -> u64 {
 /// buffer-and-size pair. [`crc64`] is the form this crate offers outside it;
 /// the C ABI entry point lives in `xz-sys`.
 ///
+/// TODO: remove once the coder `code` functions take their buffers as
+/// slices; every caller then has a slice and calls [`crc64`] directly.
+///
 /// # Safety
 /// `buf` must be readable for `size` bytes, or `size` must be zero.
 pub(crate) unsafe fn lzma_crc64(buf: *const u8, size: size_t, crc: u64) -> u64 {
