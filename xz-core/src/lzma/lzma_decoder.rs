@@ -2896,7 +2896,7 @@ unsafe fn lzma_decode(
     }
     (*dictptr).full = dict.full;
     (*coder).rc = rc;
-    *in_pos = rc_in_ptr.offset_from(input) as size_t;
+    *in_pos = rc_in_ptr.offset_from_unsigned(input);
     (*coder).state = state as lzma_lzma_state;
     (*coder).rep0 = rep0;
     (*coder).rep1 = rep1;
@@ -3173,4 +3173,27 @@ pub(crate) unsafe fn lzma_lzma_props_decode(
         *options = opt as *mut c_void;
         return LZMA_OK;
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dict_put_writes_at_pos_via_add() {
+        let mut storage = [0u8; 8];
+        let mut dict = lzma_dict {
+            buf: storage.as_mut_ptr(),
+            pos: 3,
+            full: 3,
+            limit: 8,
+            size: 8,
+            has_wrapped: true,
+            need_reset: false,
+        };
+
+        unsafe { dict_put(core::ptr::addr_of_mut!(dict), 0x5A) };
+        assert_eq!(storage[3], 0x5A);
+        assert_eq!(dict.pos, 4);
+    }
 }
