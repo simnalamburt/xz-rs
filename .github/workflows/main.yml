@@ -45,7 +45,7 @@ jobs:
       with:
         submodules: true
     - name: Install Rust (rustup)
-      run: rustup toolchain install ${{ matrix.rust }} --force-non-host --no-self-update && rustup default ${{ matrix.rust }}
+      run: rustup toolchain install ${{ matrix.rust }} --force-non-host --no-self-update && rustup default ${{ matrix.rust }} --force-non-host
       shell: bash
     - uses: Swatinem/rust-cache@v2
       with:
