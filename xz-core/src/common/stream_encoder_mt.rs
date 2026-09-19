@@ -795,7 +795,12 @@ unsafe fn stream_encode_mt_blocks(
             mythread_i_747 = 1;
         }
         if ret == LZMA_STREAM_END {
-            ret = lzma_index_append((*coder).index, allocator, unpadded_size, uncompressed_size);
+            ret = lzma_index_append(
+                &mut *(*coder).index,
+                allocator,
+                unpadded_size,
+                uncompressed_size,
+            );
             if ret != LZMA_OK {
                 threads_stop(coder, false);
                 return ret;
@@ -844,7 +849,7 @@ unsafe fn stream_encode_mt_blocks(
     let ret_: lzma_ret = lzma_index_encoder_init(
         ::core::ptr::addr_of_mut!((*coder).index_encoder),
         allocator,
-        (*coder).index,
+        &*(*coder).index,
     );
     if ret_ != LZMA_OK {
         return ret_;
@@ -965,7 +970,9 @@ unsafe fn stream_encoder_mt_end(coder_ptr: *mut c_void, allocator: *const lzma_a
         allocator,
     );
     lzma_next_end(::core::ptr::addr_of_mut!((*coder).index_encoder), allocator);
-    lzma_index_end((*coder).index, allocator);
+    if !(*coder).index.is_null() {
+        lzma_index_end(&mut *(*coder).index, allocator);
+    }
     mythread_cond_destroy(::core::ptr::addr_of_mut!((*coder).cond));
     mythread_mutex_destroy(::core::ptr::addr_of_mut!((*coder).mutex));
     crate::alloc::internal_free(coder, allocator);
@@ -1310,7 +1317,9 @@ unsafe fn stream_encoder_mt_init(
     if ret__2 != LZMA_OK {
         return ret__2;
     }
-    lzma_index_end((*coder).index, allocator);
+    if !(*coder).index.is_null() {
+        lzma_index_end(&mut *(*coder).index, allocator);
+    }
     (*coder).index = lzma_index_init(allocator);
     if (*coder).index.is_null() {
         return LZMA_MEM_ERROR;

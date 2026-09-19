@@ -267,7 +267,7 @@ unsafe fn file_info_decode(
                 let ret: lzma_ret = lzma_index_decoder_init(
                     ::core::ptr::addr_of_mut!((*coder).index_decoder),
                     allocator,
-                    ::core::ptr::addr_of_mut!((*coder).this_index),
+                    &mut (*coder).this_index,
                     (*coder).memlimit - memused,
                 );
                 if ret != LZMA_OK {
@@ -367,21 +367,24 @@ unsafe fn file_info_decode(
                     return ret;
                 }
                 if lzma_index_stream_flags(
-                    (*coder).this_index,
+                    &mut *(*coder).this_index,
                     ::core::ptr::addr_of_mut!((*coder).footer_flags),
                 ) != LZMA_OK
                 {
                     return LZMA_PROG_ERROR;
                 }
-                if lzma_index_stream_padding((*coder).this_index, (*coder).stream_padding)
+                if lzma_index_stream_padding(&mut *(*coder).this_index, (*coder).stream_padding)
                     != LZMA_OK
                 {
                     return LZMA_PROG_ERROR;
                 }
                 (*coder).stream_padding = 0;
                 if !(*coder).combined_index.is_null() {
-                    let ret: lzma_ret =
-                        lzma_index_cat((*coder).this_index, (*coder).combined_index, allocator);
+                    let ret: lzma_ret = lzma_index_cat(
+                        &mut *(*coder).this_index,
+                        &mut *(*coder).combined_index,
+                        allocator,
+                    );
                     if ret != LZMA_OK {
                         return ret;
                     }
@@ -466,15 +469,19 @@ unsafe fn file_info_decoder_memconfig(
 unsafe fn file_info_decoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
     let coder: *mut lzma_file_info_coder = coder_ptr as *mut lzma_file_info_coder;
     lzma_next_end(::core::ptr::addr_of_mut!((*coder).index_decoder), allocator);
-    lzma_index_end((*coder).this_index, allocator);
-    lzma_index_end((*coder).combined_index, allocator);
+    if !(*coder).this_index.is_null() {
+        lzma_index_end(&mut *(*coder).this_index, allocator);
+    }
+    if !(*coder).combined_index.is_null() {
+        lzma_index_end(&mut *(*coder).combined_index, allocator);
+    }
     crate::alloc::internal_free(coder, allocator);
 }
 unsafe fn lzma_file_info_decoder_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
     seek_pos: *mut u64,
-    dest_index: *mut *mut lzma_index,
+    dest_index: &mut *mut lzma_index,
     memlimit: u64,
     file_size: u64,
 ) -> lzma_ret {
@@ -484,7 +491,7 @@ unsafe fn lzma_file_info_decoder_init(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
                 *mut u64,
-                *mut *mut lzma_index,
+                &mut *mut lzma_index,
                 u64,
                 u64,
             ) -> lzma_ret,
@@ -496,7 +503,7 @@ unsafe fn lzma_file_info_decoder_init(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
                 *mut u64,
-                *mut *mut lzma_index,
+                &mut *mut lzma_index,
                 u64,
                 u64,
             ) -> lzma_ret,
@@ -510,7 +517,7 @@ unsafe fn lzma_file_info_decoder_init(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
                 *mut u64,
-                *mut *mut lzma_index,
+                &mut *mut lzma_index,
                 u64,
                 u64,
             ) -> lzma_ret,
@@ -522,14 +529,11 @@ unsafe fn lzma_file_info_decoder_init(
                 *mut lzma_next_coder,
                 *const lzma_allocator,
                 *mut u64,
-                *mut *mut lzma_index,
+                &mut *mut lzma_index,
                 u64,
                 u64,
             ) -> lzma_ret,
     ));
-    if dest_index.is_null() {
-        return LZMA_PROG_ERROR;
-    }
     let mut coder: *mut lzma_file_info_coder = (*next).coder as *mut lzma_file_info_coder;
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_file_info_coder>(allocator);
@@ -576,9 +580,13 @@ unsafe fn lzma_file_info_decoder_init(
     (*coder).file_cur_pos = 0;
     (*coder).file_target_pos = 0;
     (*coder).file_size = file_size;
-    lzma_index_end((*coder).this_index, allocator);
+    if !(*coder).this_index.is_null() {
+        lzma_index_end(&mut *(*coder).this_index, allocator);
+    }
     (*coder).this_index = core::ptr::null_mut();
-    lzma_index_end((*coder).combined_index, allocator);
+    if !(*coder).combined_index.is_null() {
+        lzma_index_end(&mut *(*coder).combined_index, allocator);
+    }
     (*coder).combined_index = core::ptr::null_mut();
     (*coder).stream_padding = 0;
     (*coder).dest_index = dest_index;
@@ -590,7 +598,7 @@ unsafe fn lzma_file_info_decoder_init(
 }
 pub unsafe fn lzma_file_info_decoder(
     strm: &mut lzma_stream,
-    dest_index: *mut *mut lzma_index,
+    dest_index: &mut *mut lzma_index,
     memlimit: u64,
     file_size: u64,
 ) -> lzma_ret {

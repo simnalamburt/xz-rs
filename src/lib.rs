@@ -117,6 +117,12 @@ pub(crate) mod sys {
         unsafe { xz_sys::lzma_index_uncompressed_size(i) }
     }
 
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    pub(crate) unsafe fn lzma_index_end(i: &mut lzma_index, allocator: *const lzma_allocator) {
+        unsafe { xz_sys::lzma_index_end(i, allocator) }
+    }
+
     /// The crate calls this with a reference and a twelve-byte footer. This
     /// backend takes pointers, so the adapter takes them from the arguments.
     pub(crate) fn lzma_stream_footer_decode(
@@ -147,6 +153,12 @@ pub(crate) mod sys {
     /// the adapter takes it from the reference.
     pub(crate) fn lzma_index_uncompressed_size(i: &lzma_index) -> lzma_vli {
         unsafe { liblzma_sys::lzma_index_uncompressed_size(i) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    pub(crate) unsafe fn lzma_index_end(i: &mut lzma_index, allocator: *const lzma_allocator) {
+        unsafe { liblzma_sys::lzma_index_end(i, allocator) }
     }
 
     /// The crate calls this with a reference and a twelve-byte footer. This
@@ -245,12 +257,12 @@ pub fn uncompressed_size<R: Read + Seek>(mut source: R) -> io::Result<u64> {
         .collect::<io::Result<Vec<u8>>>()?;
 
     let uncompressed_size = unsafe {
-        let mut i: MaybeUninit<*mut sys::lzma_index> = MaybeUninit::uninit();
+        let mut i: *mut sys::lzma_index = std::ptr::null_mut();
         let mut memlimit = u64::MAX;
         let mut in_pos = 0usize;
 
         let ret = sys::lzma_index_buffer_decode(
-            i.as_mut_ptr(),
+            &mut i,
             &mut memlimit,
             std::ptr::null(),
             buf.as_ptr(),
@@ -265,11 +277,9 @@ pub fn uncompressed_size<R: Read + Seek>(mut source: R) -> io::Result<u64> {
             ));
         }
 
-        let i = i.assume_init();
-
         let uncompressed_size = sys::lzma_index_uncompressed_size(i.as_ref().unwrap());
 
-        sys::lzma_index_end(i, std::ptr::null());
+        sys::lzma_index_end(i.as_mut().unwrap(), std::ptr::null());
 
         uncompressed_size
     };

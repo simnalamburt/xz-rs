@@ -122,50 +122,35 @@ unsafe fn index_encode(
 unsafe fn index_encoder_end(coder: *mut c_void, allocator: *const lzma_allocator) {
     crate::alloc::internal_free(coder as *mut lzma_index_coder, allocator);
 }
-unsafe fn index_encoder_reset(coder: *mut lzma_index_coder, i: *const lzma_index) {
-    lzma_index_iter_init(&mut (*coder).iter, c_ref(i));
+unsafe fn index_encoder_reset(coder: *mut lzma_index_coder, i: &lzma_index) {
+    lzma_index_iter_init(&mut (*coder).iter, i);
     (*coder).sequence = SEQ_INDICATOR;
-    (*coder).index = i;
+    (*coder).index = i as *const lzma_index;
     (*coder).pos = 0;
     (*coder).crc32 = 0;
 }
 pub(crate) unsafe fn lzma_index_encoder_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
-    i: *const lzma_index,
+    i: &lzma_index,
 ) -> lzma_ret {
     if core::mem::transmute::<
-        Option<
-            unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_index) -> lzma_ret,
-        >,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_index) -> lzma_ret>,
         uintptr_t,
     >(Some(
         lzma_index_encoder_init
-            as unsafe fn(
-                *mut lzma_next_coder,
-                *const lzma_allocator,
-                *const lzma_index,
-            ) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_index) -> lzma_ret,
     )) != (*next).init
     {
         lzma_next_end(next, allocator);
     }
     (*next).init = core::mem::transmute::<
-        Option<
-            unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_index) -> lzma_ret,
-        >,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_index) -> lzma_ret>,
         uintptr_t,
     >(Some(
         lzma_index_encoder_init
-            as unsafe fn(
-                *mut lzma_next_coder,
-                *const lzma_allocator,
-                *const lzma_index,
-            ) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_index) -> lzma_ret,
     ));
-    if i.is_null() {
-        return LZMA_PROG_ERROR;
-    }
     if (*next).coder.is_null() {
         (*next).coder =
             crate::alloc::internal_alloc_object::<lzma_index_coder>(allocator) as *mut c_void;
@@ -192,7 +177,7 @@ pub(crate) unsafe fn lzma_index_encoder_init(
     index_encoder_reset((*next).coder as *mut lzma_index_coder, i);
     LZMA_OK
 }
-pub unsafe fn lzma_index_encoder(strm: &mut lzma_stream, i: *const lzma_index) -> lzma_ret {
+pub unsafe fn lzma_index_encoder(strm: &mut lzma_stream, i: &lzma_index) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
     if ret != LZMA_OK {
         return ret;
@@ -211,15 +196,15 @@ pub unsafe fn lzma_index_encoder(strm: &mut lzma_stream, i: *const lzma_index) -
     LZMA_OK
 }
 pub unsafe fn lzma_index_buffer_encode(
-    i: *const lzma_index,
+    i: &lzma_index,
     out: *mut u8,
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
-    if i.is_null() || out.is_null() || out_pos.is_null() || *out_pos > out_size {
+    if out.is_null() || out_pos.is_null() || *out_pos > out_size {
         return LZMA_PROG_ERROR;
     }
-    if ((out_size - *out_pos) as lzma_vli) < lzma_index_size(c_ref(i)) {
+    if ((out_size - *out_pos) as lzma_vli) < lzma_index_size(i) {
         return LZMA_BUF_ERROR;
     }
     let mut coder: lzma_index_coder = lzma_index_coder {

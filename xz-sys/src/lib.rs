@@ -939,8 +939,15 @@ pub unsafe extern "C" fn lzma_index_buffer_decode(
     in_pos: *mut size_t,
     in_size: size_t,
 ) -> lzma_ret {
+    // C stores `*i = NULL` first when `i` is non-NULL, then rejects a NULL `i`.
+    if !i.is_null() {
+        *i = core::ptr::null_mut();
+    }
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::index_decoder::lzma_index_buffer_decode(
-        i.cast(),
+        c_mut(i.cast()),
         memlimit,
         normalize_c_allocator(allocator).cast(),
         input,
@@ -956,7 +963,11 @@ pub unsafe extern "C" fn lzma_index_uncompressed_size(i: *const lzma_index) -> l
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn lzma_index_end(i: *mut lzma_index, allocator: *const lzma_allocator) {
-    xz_core::common::index::lzma_index_end(i.cast(), normalize_c_allocator(allocator).cast())
+    // C is a no-op on NULL.
+    if i.is_null() {
+        return;
+    }
+    xz_core::common::index::lzma_index_end(c_mut(i.cast()), normalize_c_allocator(allocator).cast())
 }
 
 /* `lzma/block.h` */
@@ -1147,8 +1158,11 @@ pub unsafe extern "C" fn lzma_index_append(
     unpadded_size: lzma_vli,
     uncompressed_size: lzma_vli,
 ) -> lzma_ret {
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::index::lzma_index_append(
-        i.cast(),
+        c_mut(i.cast()),
         normalize_c_allocator(allocator).cast(),
         unpadded_size,
         uncompressed_size,
@@ -1160,7 +1174,10 @@ pub unsafe extern "C" fn lzma_index_stream_flags(
     i: *mut lzma_index,
     stream_flags: *const lzma_stream_flags,
 ) -> lzma_ret {
-    xz_core::common::index::lzma_index_stream_flags(i.cast(), stream_flags.cast())
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::index::lzma_index_stream_flags(c_mut(i.cast()), stream_flags.cast())
 }
 
 #[unsafe(no_mangle)]
@@ -1173,7 +1190,10 @@ pub unsafe extern "C" fn lzma_index_stream_padding(
     i: *mut lzma_index,
     stream_padding: lzma_vli,
 ) -> lzma_ret {
-    xz_core::common::index::lzma_index_stream_padding(i.cast(), stream_padding)
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::index::lzma_index_stream_padding(c_mut(i.cast()), stream_padding)
 }
 
 #[unsafe(no_mangle)]
@@ -1238,9 +1258,12 @@ pub unsafe extern "C" fn lzma_index_cat(
     src: *mut lzma_index,
     allocator: *const lzma_allocator,
 ) -> lzma_ret {
+    if dest.is_null() || src.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::index::lzma_index_cat(
-        dest.cast(),
-        src.cast(),
+        c_mut(dest.cast()),
+        c_mut(src.cast()),
         normalize_c_allocator(allocator).cast(),
     )
 }
@@ -1250,7 +1273,8 @@ pub unsafe extern "C" fn lzma_index_dup(
     i: *const lzma_index,
     allocator: *const lzma_allocator,
 ) -> *mut lzma_index {
-    xz_core::common::index::lzma_index_dup(i.cast(), normalize_c_allocator(allocator).cast()).cast()
+    xz_core::common::index::lzma_index_dup(c_ref(i.cast()), normalize_c_allocator(allocator).cast())
+        .cast()
 }
 
 #[unsafe(no_mangle)]
@@ -1261,7 +1285,11 @@ pub unsafe extern "C" fn lzma_index_encoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::index_encoder::lzma_index_encoder(strm, i.cast())
+    // C's lzma_index_encoder_init returns LZMA_PROG_ERROR for a NULL index.
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::index_encoder::lzma_index_encoder(strm, c_ref(i.cast()))
 }
 
 #[unsafe(no_mangle)]
@@ -1270,16 +1298,19 @@ pub unsafe extern "C" fn lzma_index_decoder(
     i: *mut *mut lzma_index,
     memlimit: u64,
 ) -> lzma_ret {
+    // C stores `*i = NULL` first when `i` is non-NULL, then rejects a NULL
+    // `strm` from lzma_next_strm_init, then rejects a NULL `i` inside
+    // lzma_index_decoder_init.
+    if !i.is_null() {
+        *i = core::ptr::null_mut();
+    }
     let Some(strm) = c_stream(strm) else {
-        // The API docs promise `*i` is initialised whenever this fails, and a
-        // NULL `strm` is one of the ways it fails. xz-core does the same store
-        // for the failures it can see, but it never sees this one.
-        if !i.is_null() {
-            *i = core::ptr::null_mut();
-        }
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::index_decoder::lzma_index_decoder(strm, i.cast(), memlimit)
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::index_decoder::lzma_index_decoder(strm, c_mut(i.cast()), memlimit)
 }
 
 #[unsafe(no_mangle)]
@@ -1289,7 +1320,15 @@ pub unsafe extern "C" fn lzma_index_buffer_encode(
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
-    xz_core::common::index_encoder::lzma_index_buffer_encode(i.cast(), out, out_pos, out_size)
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::index_encoder::lzma_index_buffer_encode(
+        c_ref(i.cast()),
+        out,
+        out_pos,
+        out_size,
+    )
 }
 
 /* `lzma/index_hash.h` */
@@ -1311,8 +1350,12 @@ pub unsafe extern "C" fn lzma_index_hash_end(
     index_hash: *mut lzma_index_hash,
     allocator: *const lzma_allocator,
 ) {
+    // C does not test NULL; lzma_free(NULL) is a no-op.
+    if index_hash.is_null() {
+        return;
+    }
     xz_core::common::index_hash::lzma_index_hash_end(
-        index_hash.cast(),
+        c_mut(index_hash.cast()),
         normalize_c_allocator(allocator).cast(),
     )
 }
@@ -1323,8 +1366,11 @@ pub unsafe extern "C" fn lzma_index_hash_append(
     unpadded_size: lzma_vli,
     uncompressed_size: lzma_vli,
 ) -> lzma_ret {
+    if index_hash.is_null() {
+        return LZMA_PROG_ERROR;
+    }
     xz_core::common::index_hash::lzma_index_hash_append(
-        index_hash.cast(),
+        c_mut(index_hash.cast()),
         unpadded_size,
         uncompressed_size,
     )
@@ -1337,7 +1383,12 @@ pub unsafe extern "C" fn lzma_index_hash_decode(
     in_pos: *mut size_t,
     in_size: size_t,
 ) -> lzma_ret {
-    xz_core::common::index_hash::lzma_index_hash_decode(index_hash.cast(), input, in_pos, in_size)
+    xz_core::common::index_hash::lzma_index_hash_decode(
+        c_mut(index_hash.cast()),
+        input,
+        in_pos,
+        in_size,
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -1486,7 +1537,11 @@ pub unsafe extern "C" fn lzma_file_info_decoder(
     let Some(strm) = c_stream(strm) else {
         return LZMA_PROG_ERROR;
     };
-    xz_core::common::file_info::lzma_file_info_decoder(strm, i.cast(), memlimit, file_size)
+    // C's lzma_file_info_decoder_init returns LZMA_PROG_ERROR for a NULL dest_index.
+    if i.is_null() {
+        return LZMA_PROG_ERROR;
+    }
+    xz_core::common::file_info::lzma_file_info_decoder(strm, c_mut(i.cast()), memlimit, file_size)
 }
 
 /*********************

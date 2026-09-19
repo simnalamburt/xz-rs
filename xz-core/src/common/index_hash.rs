@@ -74,10 +74,10 @@ pub unsafe fn lzma_index_hash_init(
     index_hash
 }
 pub unsafe fn lzma_index_hash_end(
-    index_hash: *mut lzma_index_hash,
+    index_hash: &mut lzma_index_hash,
     allocator: *const lzma_allocator,
 ) {
-    crate::alloc::internal_free(index_hash, allocator);
+    crate::alloc::internal_free(index_hash as *mut lzma_index_hash, allocator);
 }
 pub fn lzma_index_hash_size(index_hash: &lzma_index_hash) -> lzma_vli {
     index_size(index_hash.blocks.count, index_hash.blocks.index_list_size)
@@ -102,12 +102,11 @@ unsafe fn hash_append(
     );
 }
 pub unsafe fn lzma_index_hash_append(
-    index_hash: *mut lzma_index_hash,
+    index_hash: &mut lzma_index_hash,
     unpadded_size: lzma_vli,
     uncompressed_size: lzma_vli,
 ) -> lzma_ret {
-    if index_hash.is_null()
-        || (*index_hash).sequence != SEQ_BLOCK
+    if index_hash.sequence != SEQ_BLOCK
         || unpadded_size < UNPADDED_SIZE_MIN
         || unpadded_size > UNPADDED_SIZE_MAX
         || uncompressed_size > LZMA_VLI_MAX
@@ -115,20 +114,18 @@ pub unsafe fn lzma_index_hash_append(
         return LZMA_PROG_ERROR;
     }
     hash_append(
-        ::core::ptr::addr_of_mut!((*index_hash).blocks),
+        ::core::ptr::addr_of_mut!(index_hash.blocks),
         unpadded_size,
         uncompressed_size,
     );
-    if (*index_hash).blocks.blocks_size > LZMA_VLI_MAX
-        || (*index_hash).blocks.uncompressed_size > LZMA_VLI_MAX
-        || index_size(
-            (*index_hash).blocks.count,
-            (*index_hash).blocks.index_list_size,
-        ) > LZMA_BACKWARD_SIZE_MAX
+    if index_hash.blocks.blocks_size > LZMA_VLI_MAX
+        || index_hash.blocks.uncompressed_size > LZMA_VLI_MAX
+        || index_size(index_hash.blocks.count, index_hash.blocks.index_list_size)
+            > LZMA_BACKWARD_SIZE_MAX
         || index_stream_size(
-            (*index_hash).blocks.blocks_size,
-            (*index_hash).blocks.count,
-            (*index_hash).blocks.index_list_size,
+            index_hash.blocks.blocks_size,
+            index_hash.blocks.count,
+            index_hash.blocks.index_list_size,
         ) > LZMA_VLI_MAX
     {
         return LZMA_DATA_ERROR;
@@ -136,7 +133,7 @@ pub unsafe fn lzma_index_hash_append(
     LZMA_OK
 }
 pub unsafe fn lzma_index_hash_decode(
-    index_hash: *mut lzma_index_hash,
+    index_hash: &mut lzma_index_hash,
     input: *const u8,
     in_pos: *mut size_t,
     in_size: size_t,

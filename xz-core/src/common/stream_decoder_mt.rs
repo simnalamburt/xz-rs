@@ -680,7 +680,7 @@ unsafe fn stream_decode_mt_block_init(
     lzma_next_end(::core::ptr::addr_of_mut!((*coder).block_decoder), allocator);
     (*coder).mem_direct_mode = 0;
     let ret: lzma_ret = lzma_index_hash_append(
-        (*coder).index_hash,
+        &mut *(*coder).index_hash,
         lzma_block_unpadded_size(&(*coder).block_options),
         (*coder).block_options.uncompressed_size,
     );
@@ -1057,7 +1057,7 @@ unsafe fn stream_decode_mt(
                     return ret_4;
                 }
                 let ret__4: lzma_ret = lzma_index_hash_append(
-                    (*coder).index_hash,
+                    &mut *(*coder).index_hash,
                     lzma_block_unpadded_size(&(*coder).block_options),
                     (*coder).block_options.uncompressed_size,
                 );
@@ -1123,7 +1123,7 @@ unsafe fn stream_decode_mt(
                 }
                 let in_old_2: size_t = *in_pos;
                 let ret_5: lzma_ret =
-                    lzma_index_hash_decode((*coder).index_hash, in_0, in_pos, in_size);
+                    lzma_index_hash_decode(&mut *(*coder).index_hash, in_0, in_pos, in_size);
                 (*coder).progress_in += (*in_pos - in_old_2) as u64;
                 if ret_5 != LZMA_STREAM_END {
                     return ret_5;
@@ -1332,7 +1332,9 @@ unsafe fn stream_decoder_mt_end(coder_ptr: *mut c_void, allocator: *const lzma_a
         ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
         allocator,
     );
-    lzma_index_hash_end((*coder).index_hash, allocator);
+    if !(*coder).index_hash.is_null() {
+        lzma_index_hash_end(&mut *(*coder).index_hash, allocator);
+    }
     crate::alloc::internal_free(coder, allocator);
 }
 unsafe fn stream_decoder_mt_get_check(coder_ptr: *const c_void) -> lzma_check {
