@@ -71,13 +71,16 @@ pub(crate) mod sys {
         auto_decoder::lzma_auto_decoder,
         common::{lzma_code, lzma_end, lzma_memlimit_get, lzma_memlimit_set},
         easy_encoder::lzma_easy_encoder,
+        filter_decoder::lzma_properties_decode,
         filter_decoder::lzma_raw_decoder,
         filter_encoder::lzma_raw_encoder,
         index::lzma_index_end,
+        index::lzma_index_uncompressed_size,
         index_decoder::lzma_index_buffer_decode,
         lzip_decoder::lzma_lzip_decoder,
         stream_decoder::lzma_stream_decoder,
         stream_encoder::lzma_stream_encoder,
+        stream_flags_decoder::lzma_stream_footer_decode,
         string_conversion::LZMA_PRESET_DEFAULT,
     };
     #[cfg(feature = "parallel")]
@@ -92,52 +95,68 @@ pub(crate) mod sys {
         lzma_lzma_preset, LZMA_PRESET_LEVEL_MASK,
     };
     pub(crate) use xz_core::types::*;
-
-    /// xz-core takes the properties as a slice. The other two backends take a
-    /// pointer and a length, so this restores the shape the rest of the crate
-    /// shares across backends.
-    pub(crate) unsafe fn lzma_properties_decode(
-        filter: *mut lzma_filter,
-        allocator: *const lzma_allocator,
-        props: *const u8,
-        props_size: usize,
-    ) -> lzma_ret {
-        xz_core::common::filter_decoder::lzma_properties_decode(
-            &mut *filter,
-            allocator,
-            core::slice::from_raw_parts(props, props_size),
-        )
-    }
-
-    /// xz-core takes the Index by reference. The other two backends take a bare
-    /// pointer, so this restores the shape the rest of the crate shares across
-    /// backends.
-    pub(crate) unsafe fn lzma_index_uncompressed_size(i: *const lzma_index) -> lzma_vli {
-        xz_core::common::index::lzma_index_uncompressed_size(&*i)
-    }
-
-    /// xz-core states the twelve-byte Stream Footer in the type. The other two
-    /// backends take a bare pointer, so this restores the shape the rest of the
-    /// crate shares across backends.
-    pub(crate) unsafe fn lzma_stream_footer_decode(
-        options: *mut lzma_stream_flags,
-        input: *const u8,
-    ) -> lzma_ret {
-        xz_core::common::stream_flags_decoder::lzma_stream_footer_decode(
-            &mut *options,
-            &*input.cast(),
-        )
-    }
 }
 
 #[cfg(feature = "xz-sys")]
 pub(crate) mod sys {
     pub(crate) use xz_sys::*;
+
+    /// The crate calls this with a reference and a slice. This backend takes a
+    /// pointer and a length, so the adapter takes them from the slice.
+    pub(crate) unsafe fn lzma_properties_decode(
+        filter: &mut lzma_filter,
+        allocator: *const lzma_allocator,
+        props: &[u8],
+    ) -> lzma_ret {
+        unsafe { xz_sys::lzma_properties_decode(filter, allocator, props.as_ptr(), props.len()) }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    pub(crate) fn lzma_index_uncompressed_size(i: &lzma_index) -> lzma_vli {
+        unsafe { xz_sys::lzma_index_uncompressed_size(i) }
+    }
+
+    /// The crate calls this with a reference and a twelve-byte footer. This
+    /// backend takes pointers, so the adapter takes them from the arguments.
+    pub(crate) fn lzma_stream_footer_decode(
+        options: &mut lzma_stream_flags,
+        input: &[u8; LZMA_STREAM_HEADER_SIZE as usize],
+    ) -> lzma_ret {
+        unsafe { xz_sys::lzma_stream_footer_decode(options, input.as_ptr()) }
+    }
 }
 
 #[cfg(feature = "liblzma-sys")]
 pub(crate) mod sys {
     pub(crate) use liblzma_sys::*;
+
+    /// The crate calls this with a reference and a slice. This backend takes a
+    /// pointer and a length, so the adapter takes them from the slice.
+    pub(crate) unsafe fn lzma_properties_decode(
+        filter: &mut lzma_filter,
+        allocator: *const lzma_allocator,
+        props: &[u8],
+    ) -> lzma_ret {
+        unsafe {
+            liblzma_sys::lzma_properties_decode(filter, allocator, props.as_ptr(), props.len())
+        }
+    }
+
+    /// The crate calls this with a reference. This backend takes a pointer, so
+    /// the adapter takes it from the reference.
+    pub(crate) fn lzma_index_uncompressed_size(i: &lzma_index) -> lzma_vli {
+        unsafe { liblzma_sys::lzma_index_uncompressed_size(i) }
+    }
+
+    /// The crate calls this with a reference and a twelve-byte footer. This
+    /// backend takes pointers, so the adapter takes them from the arguments.
+    pub(crate) fn lzma_stream_footer_decode(
+        options: &mut lzma_stream_flags,
+        input: &[u8; LZMA_STREAM_HEADER_SIZE as usize],
+    ) -> lzma_ret {
+        unsafe { liblzma_sys::lzma_stream_footer_decode(options, input.as_ptr()) }
+    }
 }
 
 use std::io::{self, prelude::*};
@@ -199,8 +218,8 @@ pub fn uncompressed_size<R: Read + Seek>(mut source: R) -> io::Result<u64> {
     source.read_exact(&mut footer)?;
 
     let lzma_stream_flags = unsafe {
-        let mut lzma_stream_flags = MaybeUninit::uninit();
-        let ret = sys::lzma_stream_footer_decode(lzma_stream_flags.as_mut_ptr(), footer.as_ptr());
+        let mut lzma_stream_flags = MaybeUninit::zeroed();
+        let ret = sys::lzma_stream_footer_decode(lzma_stream_flags.assume_init_mut(), &footer);
 
         if ret != sys::LZMA_OK {
             return Err(io::Error::new(
@@ -248,7 +267,7 @@ pub fn uncompressed_size<R: Read + Seek>(mut source: R) -> io::Result<u64> {
 
         let i = i.assume_init();
 
-        let uncompressed_size = sys::lzma_index_uncompressed_size(i);
+        let uncompressed_size = sys::lzma_index_uncompressed_size(i.as_ref().unwrap());
 
         sys::lzma_index_end(i, std::ptr::null());
 

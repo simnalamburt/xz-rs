@@ -1118,14 +1118,7 @@ impl Filters {
         mut filter: sys::lzma_filter,
         properties: &[u8],
     ) -> Result<&mut Filters, Error> {
-        cvt(unsafe {
-            sys::lzma_properties_decode(
-                &mut filter,
-                std::ptr::null(),
-                properties.as_ptr(),
-                properties.len(),
-            )
-        })?;
+        cvt(unsafe { sys::lzma_properties_decode(&mut filter, std::ptr::null(), properties) })?;
         let pos = self.inner.len() - 1;
         self.inner.insert(pos, filter);
         Ok(self)
