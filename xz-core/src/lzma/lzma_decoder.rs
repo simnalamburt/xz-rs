@@ -1587,7 +1587,7 @@ macro_rules! rc_direct {
         );
     }};
 }
-unsafe fn lzma_decode(
+pub(crate) unsafe fn lzma_decode(
     coder: &mut lzma_lzma1_decoder,
     dictptr: *mut lzma_dict,
     input: *const u8,
@@ -2916,7 +2916,7 @@ unsafe fn lzma_decode(
     }
     ret
 }
-unsafe fn lzma_decoder_uncompressed(
+pub(crate) unsafe fn lzma_decoder_uncompressed(
     coder: &mut lzma_lzma1_decoder,
     uncompressed_size: lzma_vli,
     allow_eopm: bool,
@@ -2924,7 +2924,7 @@ unsafe fn lzma_decoder_uncompressed(
     coder.uncompressed_size = uncompressed_size;
     coder.allow_eopm = allow_eopm;
 }
-unsafe fn lzma_decoder_reset(coder: &mut lzma_lzma1_decoder, opt: *const c_void) {
+pub(crate) unsafe fn lzma_decoder_reset(coder: &mut lzma_lzma1_decoder, opt: *const c_void) {
     let options: *const lzma_options_lzma = opt as *const lzma_options_lzma;
     coder.pos_mask = (1u32 << (*options).pb).wrapping_sub(1) as u32;
     literal_init(
@@ -3040,23 +3040,22 @@ pub unsafe fn lzma_lzma_decoder_create(
     options: *const lzma_options_lzma,
     lz_options: *mut lzma_lz_options,
 ) -> lzma_ret {
-    if (*lz).coder.is_null() {
-        (*lz).coder = crate::alloc::internal_alloc_object::<lzma_lzma1_decoder>(allocator).cast();
-        if (*lz).coder.is_null() {
+    if !matches!(*lz, lzma_lz_decoder::Lzma1(_)) {
+        let coder = crate::alloc::internal_alloc_object::<lzma_lzma1_decoder>(allocator);
+        if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*lz).code = lz_decoder_code_fn!(lzma_decode, lzma_lzma1_decoder);
-        (*lz).end = coder_end_fn!(lzma_decoder_end, lzma_lzma1_decoder);
-        (*lz).reset = lz_decoder_reset_fn!(lzma_decoder_reset, lzma_lzma1_decoder);
-        (*lz).set_uncompressed =
-            lz_decoder_set_uncompressed_fn!(lzma_decoder_uncompressed, lzma_lzma1_decoder);
+        *lz = lzma_lz_decoder::Lzma1(coder);
     }
     (*lz_options).dict_size = (*options).dict_size as size_t;
     (*lz_options).preset_dict = (*options).preset_dict;
     (*lz_options).preset_dict_size = (*options).preset_dict_size as size_t;
     LZMA_OK
 }
-unsafe fn lzma_decoder_end(coder: &mut lzma_lzma1_decoder, allocator: *const lzma_allocator) {
+pub(crate) unsafe fn lzma_decoder_end(
+    coder: &mut lzma_lzma1_decoder,
+    allocator: *const lzma_allocator,
+) {
     crate::alloc::internal_free(coder as *mut lzma_lzma1_decoder, allocator);
 }
 unsafe fn lzma_decoder_init(
@@ -3090,10 +3089,8 @@ unsafe fn lzma_decoder_init(
     if ret != LZMA_OK {
         return ret;
     }
-    (*lz).end = coder_end_fn!(lzma_decoder_end, lzma_lzma1_decoder);
-    let coder: &mut lzma_lzma1_decoder = coder_state!((*lz).coder, lzma_lzma1_decoder);
-    lzma_decoder_reset(coder, options);
-    lzma_decoder_uncompressed(coder, uncomp_size, allow_eopm);
+    (*lz).reset(options);
+    (*lz).set_uncompressed(uncomp_size, allow_eopm);
     LZMA_OK
 }
 pub(crate) unsafe fn lzma_lzma_decoder_init(

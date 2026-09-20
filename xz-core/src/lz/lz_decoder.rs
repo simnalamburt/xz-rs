@@ -1,3 +1,5 @@
+use crate::lzma::lzma_decoder::lzma_lzma1_decoder;
+use crate::lzma::lzma2_decoder::lzma_lzma2_coder;
 use crate::types::*;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -37,13 +39,88 @@ pub const LZ_DICT_EXTRA: u32 = 32;
     target_feature = "sse2"
 )))]
 pub const LZ_DICT_EXTRA: u32 = 0;
-pub const LZMA_LZ_DECODER_INIT: lzma_lz_decoder = lzma_lz_decoder {
-    coder: core::ptr::null_mut(),
-    code: lzma_lz_decoder_code_uninitialized,
-    reset: None,
-    set_uncompressed: None,
-    end: None,
-};
+/// The decoder the LZ layer drives. C dispatches through a table of function
+/// pointers stored next to a `void *`; the implementations are LZMA1 and LZMA2
+/// and nothing else, so the set is an enum and every call below is a direct
+/// one. The pointer is the coder's own state, allocated through
+/// `lzma_allocator` and freed by [`lzma_lz_decoder::end`].
+#[derive(Copy, Clone)]
+pub enum lzma_lz_decoder {
+    /// Before the filter's init function fills this in, and after `end`.
+    Uninitialized,
+    Lzma1(*mut lzma_lzma1_decoder),
+    Lzma2(*mut lzma_lzma2_coder),
+}
+
+#[cold]
+fn uninitialized() -> ! {
+    panic!("uninitialized LZ decoder callback")
+}
+
+impl lzma_lz_decoder {
+    pub unsafe fn code(
+        &mut self,
+        dict: *mut lzma_dict,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+    ) -> lzma_ret {
+        match *self {
+            Self::Lzma1(coder) => {
+                crate::lzma::lzma_decoder::lzma_decode(&mut *coder, dict, input, in_pos, in_size)
+            }
+            Self::Lzma2(coder) => {
+                crate::lzma::lzma2_decoder::lzma2_decode(&mut *coder, dict, input, in_pos, in_size)
+            }
+            Self::Uninitialized => uninitialized(),
+        }
+    }
+
+    /// Only LZMA1 has this, and only LZMA2 calls it, on the LZMA1 decoder it
+    /// owns. C stores `NULL` in the other cases and the caller never looks.
+    pub unsafe fn reset(&mut self, options: *const c_void) {
+        match *self {
+            Self::Lzma1(coder) => {
+                crate::lzma::lzma_decoder::lzma_decoder_reset(&mut *coder, options)
+            }
+            _ => {
+                debug_assert!(false, "reset on a decoder that has none");
+                core::hint::unreachable_unchecked()
+            }
+        }
+    }
+
+    /// See [`lzma_lz_decoder::reset`] for who calls this.
+    pub unsafe fn set_uncompressed(&mut self, uncompressed_size: lzma_vli, allow_eopm: bool) {
+        match *self {
+            Self::Lzma1(coder) => crate::lzma::lzma_decoder::lzma_decoder_uncompressed(
+                &mut *coder,
+                uncompressed_size,
+                allow_eopm,
+            ),
+            _ => {
+                debug_assert!(false, "set_uncompressed on a decoder that has none");
+                core::hint::unreachable_unchecked()
+            }
+        }
+    }
+
+    pub unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        match *self {
+            Self::Lzma1(coder) => {
+                crate::lzma::lzma_decoder::lzma_decoder_end(&mut *coder, allocator)
+            }
+            Self::Lzma2(coder) => {
+                crate::lzma::lzma2_decoder::lzma2_decoder_end(&mut *coder, allocator)
+            }
+            Self::Uninitialized => {
+                #[cfg(feature = "custom_allocator")]
+                crate::alloc::internal_free_bytes(core::ptr::null_mut(), 0, allocator);
+            }
+        }
+        *self = Self::Uninitialized;
+    }
+}
 unsafe fn lz_decoder_reset(coder: *mut lzma_coder) {
     (*coder).dict.pos = LZ_DICT_INIT_POS as size_t;
     (*coder).dict.full = 0;
@@ -83,8 +160,7 @@ unsafe fn decode_buffer(
                 (*coder).dict.size.wrapping_sub((*coder).dict.pos)
             },
         );
-        let ret: lzma_ret = ((*coder).lz.code)(
-            (*coder).lz.coder,
+        let ret: lzma_ret = (*coder).lz.code(
             ::core::ptr::addr_of_mut!((*coder).dict),
             input,
             in_pos,
@@ -181,14 +257,7 @@ unsafe fn lz_decoder_end(coder: &mut lzma_coder, allocator: *const lzma_allocato
         coder.dict.size.wrapping_add(LZ_DICT_EXTRA as size_t),
         allocator,
     );
-    if let Some(end) = coder.lz.end {
-        end(coder.lz.coder, allocator);
-    } else {
-        #[cfg(feature = "custom_allocator")]
-        crate::alloc::internal_free_bytes(coder.lz.coder, 0, allocator);
-        #[cfg(not(feature = "custom_allocator"))]
-        debug_assert!(coder.lz.coder.is_null());
-    }
+    coder.lz.end(allocator);
     crate::alloc::internal_free(coder, allocator);
 }
 pub unsafe fn lzma_lz_decoder_init(
@@ -214,7 +283,7 @@ pub unsafe fn lzma_lz_decoder_init(
         (*next).end = coder_end_fn!(lz_decoder_end, lzma_coder);
         (*coder).dict.buf = core::ptr::null_mut();
         (*coder).dict.size = 0;
-        (*coder).lz = LZMA_LZ_DECODER_INIT;
+        (*coder).lz = lzma_lz_decoder::Uninitialized;
         (*coder).next = lzma_next_coder_s {
             coder: core::ptr::null_mut(),
             id: LZMA_VLI_UNKNOWN,
@@ -243,7 +312,7 @@ pub unsafe fn lzma_lz_decoder_init(
     if ret != LZMA_OK {
         return ret;
     }
-    if (*coder).lz.coder.is_null() {
+    if matches!((*coder).lz, lzma_lz_decoder::Uninitialized) {
         return LZMA_PROG_ERROR;
     }
     if lz_options.dict_size < 4096 {
