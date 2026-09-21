@@ -358,11 +358,7 @@ unsafe fn file_info_decode(
                 if ret != LZMA_OK {
                     return ret;
                 }
-                if lzma_index_stream_flags(
-                    &mut *coder.this_index,
-                    ::core::ptr::addr_of_mut!(coder.footer_flags),
-                ) != LZMA_OK
-                {
+                if lzma_index_stream_flags(&mut *coder.this_index, &coder.footer_flags) != LZMA_OK {
                     return LZMA_PROG_ERROR;
                 }
                 if lzma_index_stream_padding(&mut *coder.this_index, coder.stream_padding)

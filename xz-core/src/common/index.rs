@@ -410,12 +410,9 @@ pub fn lzma_index_padding_size(i: &lzma_index) -> u32 {
 }
 pub unsafe fn lzma_index_stream_flags(
     i: &mut lzma_index,
-    stream_flags: *const lzma_stream_flags,
+    stream_flags: &lzma_stream_flags,
 ) -> lzma_ret {
-    if stream_flags.is_null() {
-        return LZMA_PROG_ERROR;
-    }
-    let ret: lzma_ret = lzma_stream_flags_compare(c_ref(stream_flags), c_ref(stream_flags));
+    let ret: lzma_ret = lzma_stream_flags_compare(stream_flags, stream_flags);
     if ret != LZMA_OK {
         return ret;
     }

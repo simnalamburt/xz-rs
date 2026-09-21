@@ -1212,10 +1212,10 @@ pub unsafe extern "C" fn lzma_index_stream_flags(
     i: *mut lzma_index,
     stream_flags: *const lzma_stream_flags,
 ) -> lzma_ret {
-    if i.is_null() {
+    if i.is_null() || stream_flags.is_null() {
         return LZMA_PROG_ERROR;
     }
-    xz_core::common::index::lzma_index_stream_flags(c_mut(i.cast()), stream_flags.cast())
+    xz_core::common::index::lzma_index_stream_flags(c_mut(i.cast()), c_ref(stream_flags.cast()))
 }
 
 #[unsafe(no_mangle)]
