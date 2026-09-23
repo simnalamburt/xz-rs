@@ -196,17 +196,14 @@ unsafe fn lz_decode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    if coder.next.code.is_none() {
+    if coder.next.coder.is_none() {
         return decode_buffer(coder, input, in_pos, in_size, out, out_pos, out_size);
     }
     while *out_pos < out_size {
         if !coder.next_finished && coder.temp.pos == coder.temp.size {
             coder.temp.pos = 0;
             coder.temp.size = 0;
-            debug_assert!(coder.next.code.is_some());
-            let next_code = coder.next.code.unwrap_unchecked();
-            let ret: lzma_ret = next_code(
-                coder.next.coder,
+            let ret: lzma_ret = coder.next.code(
                 allocator,
                 input,
                 in_pos,
@@ -272,30 +269,17 @@ pub unsafe fn lzma_lz_decoder_init(
         *mut lzma_lz_options,
     ) -> lzma_ret,
 ) -> lzma_ret {
-    let mut coder: *mut lzma_coder = (*next).coder as *mut lzma_coder;
+    let mut coder: *mut lzma_coder = (*next).coder_as::<lzma_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(lz_decode, lzma_coder);
-        (*next).end = coder_end_fn!(lz_decoder_end, lzma_coder);
+        (*next).set_coder(coder);
         (*coder).dict.buf = core::ptr::null_mut();
         (*coder).dict.size = 0;
         (*coder).lz = lzma_lz_decoder::Uninitialized;
-        (*coder).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*coder).next = LZMA_NEXT_CODER_INIT;
     }
     let mut lz_options: lzma_lz_options = lzma_lz_options {
         dict_size: 0,
@@ -345,7 +329,7 @@ pub unsafe fn lzma_lz_decoder_init(
         }
         (*coder).dict.size = alloc_size;
     }
-    lz_decoder_reset((*next).coder as *mut lzma_coder);
+    lz_decoder_reset((*next).coder_as::<lzma_coder>());
     if !lz_options.preset_dict.is_null() && lz_options.preset_dict_size > 0 {
         let copy_size: size_t = if lz_options.preset_dict_size < lz_options.dict_size {
             lz_options.preset_dict_size
@@ -370,6 +354,26 @@ pub unsafe fn lzma_lz_decoder_init(
         allocator,
         filters.offset(1),
     )
+}
+impl NextCoder for lzma_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        lz_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        lz_decoder_end(self, allocator)
+    }
 }
 pub fn lzma_lz_decoder_memusage(dictionary_size: size_t) -> u64 {
     (core::mem::size_of::<lzma_coder>() as u64)

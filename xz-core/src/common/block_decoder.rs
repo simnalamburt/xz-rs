@@ -52,18 +52,8 @@ unsafe fn block_decode(
                 } else {
                     coder.uncompressed_limit - coder.uncompressed_size
                 }) as size_t;
-            debug_assert!(coder.next.code.is_some());
-            let code = coder.next.code.unwrap_unchecked();
-            let ret: lzma_ret = code(
-                coder.next.coder,
-                allocator,
-                input,
-                in_pos,
-                in_stop,
-                out,
-                out_pos,
-                out_stop,
-                action,
+            let ret: lzma_ret = coder.next.code(
+                allocator, input, in_pos, in_stop, out, out_pos, out_stop, action,
             );
             let in_used: size_t = *in_pos - in_start;
             let out_used: size_t = *out_pos - out_start;
@@ -180,27 +170,14 @@ pub(crate) unsafe fn lzma_block_decoder_init(
     {
         return LZMA_PROG_ERROR;
     }
-    let mut coder: *mut lzma_block_coder = (*next).coder as *mut lzma_block_coder;
+    let mut coder: *mut lzma_block_coder = (*next).coder_as::<lzma_block_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_block_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(block_decode, lzma_block_coder);
-        (*next).end = coder_end_fn!(block_decoder_end, lzma_block_coder);
-        (*coder).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).next = LZMA_NEXT_CODER_INIT;
     }
     (*coder).sequence = SEQ_CODE;
     (*coder).block = block as *mut lzma_block;
@@ -230,6 +207,26 @@ pub(crate) unsafe fn lzma_block_decoder_init(
         allocator,
         block.filters,
     )
+}
+impl NextCoder for lzma_block_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        block_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        block_decoder_end(self, allocator)
+    }
 }
 pub unsafe fn lzma_block_decoder(strm: &mut lzma_stream, block: &mut lzma_block) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);

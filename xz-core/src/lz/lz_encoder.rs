@@ -54,9 +54,8 @@ unsafe fn fill_window(
         move_window(::core::ptr::addr_of_mut!((*coder).mf));
     }
     let mut write_pos: size_t = (*coder).mf.write_pos as size_t;
-    let mut ret = if let Some(code) = (*coder).next.code {
-        code(
-            (*coder).next.coder,
+    let mut ret = if (*coder).next.coder.is_some() {
+        (*coder).next.code(
             allocator,
             input,
             in_pos,
@@ -456,7 +455,7 @@ unsafe fn lz_encoder_set_out_limit(
     uncomp_size: *mut u64,
     out_limit: u64,
 ) -> lzma_ret {
-    if coder.next.code.is_none() {
+    if coder.next.coder.is_none() {
         if let Some(ret) = coder.lz.set_out_limit(uncomp_size, out_limit) {
             return ret;
         }
@@ -475,17 +474,13 @@ pub unsafe fn lzma_lz_encoder_init(
         *mut lzma_lz_options,
     ) -> lzma_ret,
 ) -> lzma_ret {
-    let mut coder: *mut lzma_coder = (*next).coder as *mut lzma_coder;
+    let mut coder: *mut lzma_coder = (*next).coder_as::<lzma_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(lz_encode, lzma_coder);
-        (*next).end = coder_end_fn!(lz_encoder_end, lzma_coder);
-        (*next).update = coder_update_fn!(lz_encoder_update, lzma_coder);
-        (*next).set_out_limit = coder_set_out_limit_fn!(lz_encoder_set_out_limit, lzma_coder);
+        (*next).set_coder(coder);
         (*coder).lz = lzma_lz_encoder::Uninitialized;
         (*coder).mf.buffer = core::ptr::null_mut();
         (*coder).mf.size = 0;
@@ -493,18 +488,7 @@ pub unsafe fn lzma_lz_encoder_init(
         (*coder).mf.son = core::ptr::null_mut();
         (*coder).mf.hash_count = 0;
         (*coder).mf.sons_count = 0;
-        (*coder).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*coder).next = LZMA_NEXT_CODER_INIT;
     }
     let mut lz_options: lzma_lz_options = lzma_lz_options {
         before_size: 0,
@@ -549,6 +533,40 @@ pub unsafe fn lzma_lz_encoder_init(
         allocator,
         filters.offset(1),
     )
+}
+impl NextCoder for lzma_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        lz_encode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        lz_encoder_end(self, allocator)
+    }
+    fn can_update(&self) -> bool {
+        true
+    }
+    unsafe fn update(
+        &mut self,
+        allocator: *const lzma_allocator,
+        filters: *const lzma_filter,
+        reversed_filters: *const lzma_filter,
+    ) -> lzma_ret {
+        lz_encoder_update(self, allocator, filters, reversed_filters)
+    }
+    unsafe fn set_out_limit(&mut self, uncomp_size: *mut u64, out_limit: u64) -> Option<lzma_ret> {
+        Some(lz_encoder_set_out_limit(self, uncomp_size, out_limit))
+    }
 }
 pub fn lzma_mf_is_supported(mf: lzma_match_finder) -> lzma_bool {
     match mf {

@@ -127,11 +127,10 @@ unsafe fn decode_index(
     update_file_cur_pos: bool,
 ) -> lzma_ret {
     let in_start: size_t = *in_pos;
-    let Some(code) = (*coder).index_decoder.code else {
+    if (*coder).index_decoder.coder.is_none() {
         return LZMA_PROG_ERROR;
-    };
-    let ret: lzma_ret = code(
-        (*coder).index_decoder.coder,
+    }
+    let ret: lzma_ret = (*coder).index_decoder.code(
         allocator,
         input,
         in_pos,
@@ -410,15 +409,11 @@ unsafe fn file_info_decoder_memconfig(
         this_index_memusage = lzma_index_memused(c_ref(coder.this_index));
     } else if coder.sequence == SEQ_INDEX_DECODE {
         let mut dummy: u64 = 0;
-        let Some(memconfig) = coder.index_decoder.memconfig else {
-            return LZMA_PROG_ERROR;
-        };
-        if memconfig(
-            coder.index_decoder.coder,
+        if coder.index_decoder.memconfig(
             ::core::ptr::addr_of_mut!(this_index_memusage),
             ::core::ptr::addr_of_mut!(dummy),
             0,
-        ) != LZMA_OK
+        ) != Some(LZMA_OK)
         {
             return LZMA_PROG_ERROR;
         }
@@ -436,15 +431,11 @@ unsafe fn file_info_decoder_memconfig(
             let idec_new_memlimit: u64 = new_memlimit - combined_index_memusage;
             let mut dummy1: u64 = 0;
             let mut dummy2: u64 = 0;
-            let Some(memconfig) = coder.index_decoder.memconfig else {
-                return LZMA_PROG_ERROR;
-            };
-            if memconfig(
-                coder.index_decoder.coder,
+            if coder.index_decoder.memconfig(
                 ::core::ptr::addr_of_mut!(dummy1),
                 ::core::ptr::addr_of_mut!(dummy2),
                 idec_new_memlimit,
-            ) != LZMA_OK
+            ) != Some(LZMA_OK)
             {
                 return LZMA_PROG_ERROR;
             }
@@ -523,28 +514,14 @@ unsafe fn lzma_file_info_decoder_init(
                 u64,
             ) -> lzma_ret,
     ));
-    let mut coder: *mut lzma_file_info_coder = (*next).coder as *mut lzma_file_info_coder;
+    let mut coder: *mut lzma_file_info_coder = (*next).coder_as::<lzma_file_info_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_file_info_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(file_info_decode, lzma_file_info_coder);
-        (*next).end = coder_end_fn!(file_info_decoder_end, lzma_file_info_coder);
-        (*next).memconfig = coder_memconfig_fn!(file_info_decoder_memconfig, lzma_file_info_coder);
-        (*coder).index_decoder = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).index_decoder = LZMA_NEXT_CODER_INIT;
         (*coder).this_index = core::ptr::null_mut();
         (*coder).combined_index = core::ptr::null_mut();
     }
@@ -567,6 +544,39 @@ unsafe fn lzma_file_info_decoder_init(
     (*coder).temp_pos = 0;
     (*coder).temp_size = LZMA_STREAM_HEADER_SIZE as size_t;
     LZMA_OK
+}
+impl NextCoder for lzma_file_info_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        file_info_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        file_info_decoder_end(self, allocator)
+    }
+    unsafe fn memconfig(
+        &mut self,
+        memusage: *mut u64,
+        old_memlimit: *mut u64,
+        new_memlimit: u64,
+    ) -> Option<lzma_ret> {
+        Some(file_info_decoder_memconfig(
+            self,
+            memusage,
+            old_memlimit,
+            new_memlimit,
+        ))
+    }
 }
 pub unsafe fn lzma_file_info_decoder(
     strm: &mut lzma_stream,

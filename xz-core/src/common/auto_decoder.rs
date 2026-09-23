@@ -72,18 +72,8 @@ unsafe fn auto_decode(
         _ => return LZMA_PROG_ERROR,
     }
     if coder.sequence != SEQ_FINISH {
-        debug_assert!(coder.next.code.is_some());
-        let code = coder.next.code.unwrap_unchecked();
-        let ret: lzma_ret = code(
-            coder.next.coder,
-            allocator,
-            input,
-            in_pos,
-            in_size,
-            out,
-            out_pos,
-            out_size,
-            action,
+        let ret: lzma_ret = coder.next.code(
+            allocator, input, in_pos, in_size, out, out_pos, out_size, action,
         );
         if ret != LZMA_STREAM_END || coder.flags & LZMA_CONCATENATED as u32 == 0 {
             return ret;
@@ -104,10 +94,7 @@ unsafe fn auto_decoder_end(coder: &mut lzma_auto_coder, allocator: *const lzma_a
     crate::alloc::internal_free(coder, allocator);
 }
 unsafe fn auto_decoder_get_check(coder: &lzma_auto_coder) -> lzma_check {
-    match coder.next.get_check {
-        Some(get_check) => get_check(coder.next.coder),
-        None => LZMA_CHECK_NONE,
-    }
+    coder.next.get_check().unwrap_or(LZMA_CHECK_NONE)
 }
 pub unsafe fn lzma_auto_decoder(strm: &mut lzma_stream, memlimit: u64, flags: u32) -> lzma_ret {
     let ret: lzma_ret = lzma_strm_init(strm);
@@ -135,8 +122,8 @@ unsafe fn auto_decoder_memconfig(
     new_memlimit: u64,
 ) -> lzma_ret {
     let mut ret: lzma_ret = LZMA_OK;
-    if let Some(memconfig) = coder.next.memconfig {
-        ret = memconfig(coder.next.coder, memusage, old_memlimit, new_memlimit);
+    if let Some(next_ret) = coder.next.memconfig(memusage, old_memlimit, new_memlimit) {
+        ret = next_ret;
     } else {
         *memusage = LZMA_MEMUSAGE_BASE;
         *old_memlimit = coder.memlimit;
@@ -176,32 +163,53 @@ unsafe fn auto_decoder_init(
     if flags & !(LZMA_SUPPORTED_FLAGS as u32) != 0 {
         return LZMA_OPTIONS_ERROR;
     }
-    let mut coder: *mut lzma_auto_coder = (*next).coder as *mut lzma_auto_coder;
+    let mut coder: *mut lzma_auto_coder = (*next).coder_as::<lzma_auto_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_auto_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(auto_decode, lzma_auto_coder);
-        (*next).end = coder_end_fn!(auto_decoder_end, lzma_auto_coder);
-        (*next).get_check = coder_get_check_fn!(auto_decoder_get_check, lzma_auto_coder);
-        (*next).memconfig = coder_memconfig_fn!(auto_decoder_memconfig, lzma_auto_coder);
-        (*coder).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).next = LZMA_NEXT_CODER_INIT;
     }
     (*coder).memlimit = if 1 > memlimit { 1 } else { memlimit };
     (*coder).flags = flags;
     (*coder).sequence = SEQ_INIT;
     LZMA_OK
+}
+impl NextCoder for lzma_auto_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        auto_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        auto_decoder_end(self, allocator)
+    }
+    unsafe fn get_check(&self) -> Option<lzma_check> {
+        Some(auto_decoder_get_check(self))
+    }
+    unsafe fn memconfig(
+        &mut self,
+        memusage: *mut u64,
+        old_memlimit: *mut u64,
+        new_memlimit: u64,
+    ) -> Option<lzma_ret> {
+        Some(auto_decoder_memconfig(
+            self,
+            memusage,
+            old_memlimit,
+            new_memlimit,
+        ))
+    }
 }

@@ -141,18 +141,7 @@ unsafe fn block_encode_normal(
     if (out_size - *out_pos) as lzma_vli > block.compressed_size {
         out_size = (*out_pos as lzma_vli + block.compressed_size) as size_t;
     }
-    let mut raw_encoder: lzma_next_coder = lzma_next_coder_s {
-        coder: core::ptr::null_mut(),
-        id: LZMA_VLI_UNKNOWN,
-        init: 0,
-        code: None,
-        end: None,
-        get_progress: None,
-        get_check: None,
-        memconfig: None,
-        update: None,
-        set_out_limit: None,
-    };
+    let mut raw_encoder: lzma_next_coder = LZMA_NEXT_CODER_INIT;
     let mut ret: lzma_ret = lzma_raw_encoder_init(
         ::core::ptr::addr_of_mut!(raw_encoder),
         allocator,
@@ -160,9 +149,8 @@ unsafe fn block_encode_normal(
     );
     if ret == LZMA_OK {
         let mut in_pos: size_t = 0;
-        ret = match raw_encoder.code {
-            Some(code) => code(
-                raw_encoder.coder,
+        ret = if raw_encoder.coder.is_some() {
+            raw_encoder.code(
                 allocator,
                 input,
                 ::core::ptr::addr_of_mut!(in_pos),
@@ -171,8 +159,9 @@ unsafe fn block_encode_normal(
                 out_pos,
                 out_size,
                 LZMA_FINISH,
-            ),
-            None => LZMA_PROG_ERROR,
+            )
+        } else {
+            LZMA_PROG_ERROR
         };
     }
     lzma_next_end(::core::ptr::addr_of_mut!(raw_encoder), allocator);

@@ -22,18 +22,7 @@ pub unsafe fn lzma_stream_buffer_decode(
     if flags & LZMA_TELL_ANY_CHECK as u32 != 0 {
         return LZMA_PROG_ERROR;
     }
-    let mut stream_decoder: lzma_next_coder = lzma_next_coder_s {
-        coder: core::ptr::null_mut(),
-        id: LZMA_VLI_UNKNOWN,
-        init: 0,
-        code: None,
-        end: None,
-        get_progress: None,
-        get_check: None,
-        memconfig: None,
-        update: None,
-        set_out_limit: None,
-    };
+    let mut stream_decoder: lzma_next_coder = LZMA_NEXT_CODER_INIT;
     let mut ret: lzma_ret = lzma_stream_decoder_init(
         ::core::ptr::addr_of_mut!(stream_decoder),
         allocator,
@@ -41,12 +30,9 @@ pub unsafe fn lzma_stream_buffer_decode(
         flags,
     );
     if ret == LZMA_OK {
-        debug_assert!(stream_decoder.code.is_some());
-        let code = stream_decoder.code.unwrap_unchecked();
         let in_start: size_t = *in_pos;
         let out_start: size_t = *out_pos;
-        ret = code(
-            stream_decoder.coder,
+        ret = stream_decoder.code(
             allocator,
             input,
             in_pos,
@@ -69,14 +55,7 @@ pub unsafe fn lzma_stream_buffer_decode(
                 }
             } else if ret == LZMA_MEMLIMIT_ERROR {
                 let mut memusage: u64 = 0;
-                debug_assert!(stream_decoder.memconfig.is_some());
-                let memconfig = stream_decoder.memconfig.unwrap_unchecked();
-                memconfig(
-                    stream_decoder.coder,
-                    memlimit,
-                    ::core::ptr::addr_of_mut!(memusage),
-                    0,
-                );
+                stream_decoder.memconfig(memlimit, ::core::ptr::addr_of_mut!(memusage), 0);
             }
         }
     }

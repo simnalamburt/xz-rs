@@ -95,11 +95,10 @@ unsafe fn microlzma_decode(
         }
         let dummy_in: u8 = 0;
         let mut dummy_in_pos: size_t = 0;
-        let Some(code) = coder.lzma.code else {
+        if coder.lzma.coder.is_none() {
             return LZMA_PROG_ERROR;
-        };
-        if code(
-            coder.lzma.coder,
+        }
+        if coder.lzma.code(
             allocator,
             ::core::ptr::addr_of!(dummy_in),
             ::core::ptr::addr_of_mut!(dummy_in_pos),
@@ -114,19 +113,11 @@ unsafe fn microlzma_decode(
         }
         coder.props_decoded = true;
     }
-    let Some(code) = coder.lzma.code else {
+    if coder.lzma.coder.is_none() {
         return LZMA_PROG_ERROR;
-    };
-    let mut ret: lzma_ret = code(
-        coder.lzma.coder,
-        allocator,
-        input,
-        in_pos,
-        in_size,
-        out,
-        out_pos,
-        out_size,
-        action,
+    }
+    let mut ret: lzma_ret = coder.lzma.code(
+        allocator, input, in_pos, in_size, out, out_pos, out_size, action,
     );
     coder.comp_size -= (*in_pos - in_start) as u64;
     if coder.uncomp_size_is_exact {
@@ -193,27 +184,14 @@ unsafe fn microlzma_decoder_init(
                 u32,
             ) -> lzma_ret,
     ));
-    let mut coder: *mut lzma_microlzma_coder = (*next).coder as *mut lzma_microlzma_coder;
+    let mut coder: *mut lzma_microlzma_coder = (*next).coder_as::<lzma_microlzma_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_microlzma_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(microlzma_decode, lzma_microlzma_coder);
-        (*next).end = coder_end_fn!(microlzma_decoder_end, lzma_microlzma_coder);
-        (*coder).lzma = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).lzma = LZMA_NEXT_CODER_INIT;
     }
     if uncomp_size > LZMA_VLI_MAX as u64 {
         return LZMA_OPTIONS_ERROR;
@@ -224,6 +202,26 @@ unsafe fn microlzma_decoder_init(
     (*coder).dict_size = dict_size;
     (*coder).props_decoded = false;
     LZMA_OK
+}
+impl NextCoder for lzma_microlzma_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        microlzma_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        microlzma_decoder_end(self, allocator)
+    }
 }
 pub unsafe fn lzma_microlzma_decoder(
     strm: &mut lzma_stream,

@@ -1,3 +1,4 @@
+use crate::delta::delta_common::{DeltaCoder, delta_coder_end};
 use crate::types::*;
 fn decode_buffer(coder: &mut lzma_delta_coder, buffer: &mut [u8]) {
     let distance: size_t = coder.distance;
@@ -29,18 +30,8 @@ unsafe fn delta_decode(
     action: lzma_action,
 ) -> lzma_ret {
     let out_start: size_t = *out_pos;
-    debug_assert!(coder.next.code.is_some());
-    let code = coder.next.code.unwrap_unchecked();
-    let ret: lzma_ret = code(
-        coder.next.coder,
-        allocator,
-        input,
-        in_pos,
-        in_size,
-        out,
-        out_pos,
-        out_size,
-        action,
+    let ret: lzma_ret = coder.next.code(
+        allocator, input, in_pos, in_size, out, out_pos, out_size, action,
     );
     debug_assert!(*out_pos >= out_start);
     let size: size_t = *out_pos - out_start;
@@ -57,8 +48,45 @@ pub(crate) unsafe fn lzma_delta_decoder_init(
     allocator: *const lzma_allocator,
     filters: *const lzma_filter_info,
 ) -> lzma_ret {
-    (*next).code = coder_code_fn!(delta_decode, lzma_delta_coder);
-    lzma_delta_coder_init(next, allocator, filters)
+    lzma_delta_coder_init::<lzma_delta_decoder>(next, allocator, filters)
+}
+#[repr(transparent)]
+pub(crate) struct lzma_delta_decoder(lzma_delta_coder);
+impl DeltaCoder for lzma_delta_decoder {
+    fn wrap(coder: lzma_delta_coder) -> Self {
+        Self(coder)
+    }
+    fn delta(&mut self) -> &mut lzma_delta_coder {
+        &mut self.0
+    }
+}
+impl NextCoder for lzma_delta_decoder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        delta_decode(
+            &mut self.0,
+            allocator,
+            input,
+            in_pos,
+            in_size,
+            out,
+            out_pos,
+            out_size,
+            action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        delta_coder_end(self, allocator)
+    }
 }
 pub(crate) unsafe fn lzma_delta_props_decode(
     options: *mut *mut c_void,

@@ -37,10 +37,9 @@ pub struct lzma_filter {
 }
 pub use crate::common::common_types::{
     ISEQ_END, ISEQ_ERROR, ISEQ_FINISH, ISEQ_FULL_BARRIER, ISEQ_FULL_FLUSH, ISEQ_RUN,
-    ISEQ_SYNC_FLUSH, LZMA_MEMUSAGE_BASE, LZMA_SUPPORTED_FLAGS, LZMA_THREADS_MAX,
-    lzma_code_function, lzma_end_function, lzma_filter_info, lzma_filter_info_s,
-    lzma_init_function, lzma_internal, lzma_internal_s, lzma_internal_sequence, lzma_next_coder,
-    lzma_next_coder_s,
+    ISEQ_SYNC_FLUSH, LZMA_MEMUSAGE_BASE, LZMA_NEXT_CODER_INIT, LZMA_SUPPORTED_FLAGS,
+    LZMA_THREADS_MAX, NextCoder, lzma_filter_info, lzma_filter_info_s, lzma_init_function,
+    lzma_internal, lzma_internal_s, lzma_internal_sequence, lzma_next_coder, lzma_next_coder_s,
 };
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -1130,7 +1129,7 @@ pub use crate::common::threading::{
 pub use crate::common::vli_decoder::lzma_vli_decode;
 pub use crate::common::vli_encoder::lzma_vli_encode;
 pub use crate::common::vli_size::lzma_vli_size;
-pub use crate::delta::delta_common::lzma_delta_coder_init;
+pub(crate) use crate::delta::delta_common::lzma_delta_coder_init;
 pub(crate) use crate::delta::delta_common::lzma_delta_coder_memusage;
 pub use crate::lz::lz_encoder_mf::{lzma_mf_find, lzma_mf_find_raw};
 pub use crate::lzma::fastpos_table::lzma_fastpos;

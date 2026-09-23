@@ -1,34 +1,39 @@
 use crate::types::*;
-unsafe fn delta_coder_end(coder: &mut lzma_delta_coder, allocator: *const lzma_allocator) {
-    lzma_next_end(::core::ptr::addr_of_mut!(coder.next), allocator);
-    crate::alloc::internal_free(coder as *mut lzma_delta_coder, allocator);
+/// The two delta coders share one state and differ only in `code`, so each
+/// wraps the state in its own type.
+pub(crate) trait DeltaCoder: NextCoder + 'static {
+    fn wrap(coder: lzma_delta_coder) -> Self;
+    fn delta(&mut self) -> &mut lzma_delta_coder;
 }
-pub unsafe fn lzma_delta_coder_init(
+/// Ends the chain and frees the coder. `T` is the wrapper `coder` was
+/// allocated as.
+pub(crate) unsafe fn delta_coder_end<T: DeltaCoder>(
+    coder: &mut T,
+    allocator: *const lzma_allocator,
+) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.delta().next), allocator);
+    crate::alloc::internal_free(coder as *mut T, allocator);
+}
+pub(crate) unsafe fn lzma_delta_coder_init<T: DeltaCoder>(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
     filters: *const lzma_filter_info,
 ) -> lzma_ret {
-    let mut coder: *mut lzma_delta_coder = (*next).coder as *mut lzma_delta_coder;
-    if coder.is_null() {
-        coder = crate::alloc::internal_alloc_object::<lzma_delta_coder>(allocator);
-        if coder.is_null() {
+    let mut wrapper: *mut T = (*next).coder_as::<T>();
+    if wrapper.is_null() {
+        wrapper = crate::alloc::internal_alloc_object::<T>(allocator);
+        if wrapper.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).end = coder_end_fn!(delta_coder_end, lzma_delta_coder);
-        (*coder).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(wrapper);
+        wrapper.write(T::wrap(lzma_delta_coder {
+            next: LZMA_NEXT_CODER_INIT,
+            distance: 0,
+            pos: 0,
+            history: [0; LZMA_DELTA_DIST_MAX as usize],
+        }));
     }
+    let coder: *mut lzma_delta_coder = (*wrapper).delta();
     if lzma_delta_coder_memusage((*filters).options) == UINT64_MAX {
         return LZMA_OPTIONS_ERROR;
     }

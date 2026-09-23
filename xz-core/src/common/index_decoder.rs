@@ -289,21 +289,51 @@ pub(crate) unsafe fn lzma_index_decoder_init(
                 u64,
             ) -> lzma_ret,
     ));
-    let mut coder: *mut lzma_index_coder = (*next).coder as *mut lzma_index_coder;
+    let mut coder: *mut lzma_index_coder = (*next).coder_as::<lzma_index_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_index_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(index_decode, lzma_index_coder);
-        (*next).end = coder_end_fn!(index_decoder_end, lzma_index_coder);
-        (*next).memconfig = coder_memconfig_fn!(index_decoder_memconfig, lzma_index_coder);
+        (*next).set_coder(coder);
         (*coder).index = core::ptr::null_mut();
     } else if !(*coder).index.is_null() {
         lzma_index_end(&mut *(*coder).index, allocator);
     }
     index_decoder_reset(coder, allocator, i, memlimit)
+}
+impl NextCoder for lzma_index_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        index_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        index_decoder_end(self, allocator)
+    }
+    unsafe fn memconfig(
+        &mut self,
+        memusage: *mut u64,
+        old_memlimit: *mut u64,
+        new_memlimit: u64,
+    ) -> Option<lzma_ret> {
+        Some(index_decoder_memconfig(
+            self,
+            memusage,
+            old_memlimit,
+            new_memlimit,
+        ))
+    }
 }
 pub unsafe fn lzma_index_decoder(
     strm: &mut lzma_stream,

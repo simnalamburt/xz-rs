@@ -195,19 +195,11 @@ unsafe fn lzip_decode(
             LZIP_BLOCK_LZMA_STREAM => {
                 let in_start: size_t = *in_pos;
                 let out_start: size_t = *out_pos;
-                let Some(code) = coder.lzma_decoder.code else {
+                if coder.lzma_decoder.coder.is_none() {
                     return LZMA_PROG_ERROR;
-                };
-                let ret: lzma_ret = code(
-                    coder.lzma_decoder.coder,
-                    allocator,
-                    input,
-                    in_pos,
-                    in_size,
-                    out,
-                    out_pos,
-                    out_size,
-                    action,
+                }
+                let ret: lzma_ret = coder.lzma_decoder.code(
+                    allocator, input, in_pos, in_size, out, out_pos, out_size, action,
                 );
                 let out_used: size_t = *out_pos - out_start;
                 coder.member_size += (*in_pos - in_start) as u64;
@@ -308,29 +300,14 @@ pub(crate) unsafe fn lzma_lzip_decoder_init(
     if flags & !(LZMA_SUPPORTED_FLAGS as u32) != 0 {
         return LZMA_OPTIONS_ERROR;
     }
-    let mut coder: *mut lzma_lzip_coder = (*next).coder as *mut lzma_lzip_coder;
+    let mut coder: *mut lzma_lzip_coder = (*next).coder_as::<lzma_lzip_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_lzip_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = coder_code_fn!(lzip_decode, lzma_lzip_coder);
-        (*next).end = coder_end_fn!(lzip_decoder_end, lzma_lzip_coder);
-        (*next).get_check = coder_get_check_fn!(lzip_decoder_get_check, lzma_lzip_coder);
-        (*next).memconfig = coder_memconfig_fn!(lzip_decoder_memconfig, lzma_lzip_coder);
-        (*coder).lzma_decoder = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).lzma_decoder = LZMA_NEXT_CODER_INIT;
     }
     (*coder).sequence = SEQ_ID_STRING;
     (*coder).memlimit = if 1 > memlimit { 1 } else { memlimit };
@@ -341,6 +318,42 @@ pub(crate) unsafe fn lzma_lzip_decoder_init(
     (*coder).first_member = true;
     (*coder).pos = 0;
     LZMA_OK
+}
+impl NextCoder for lzma_lzip_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        lzip_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        lzip_decoder_end(self, allocator)
+    }
+    unsafe fn get_check(&self) -> Option<lzma_check> {
+        Some(lzip_decoder_get_check(self))
+    }
+    unsafe fn memconfig(
+        &mut self,
+        memusage: *mut u64,
+        old_memlimit: *mut u64,
+        new_memlimit: u64,
+    ) -> Option<lzma_ret> {
+        Some(lzip_decoder_memconfig(
+            self,
+            memusage,
+            old_memlimit,
+            new_memlimit,
+        ))
+    }
 }
 pub unsafe fn lzma_lzip_decoder(strm: &mut lzma_stream, memlimit: u64, flags: u32) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);

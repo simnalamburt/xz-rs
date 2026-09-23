@@ -18,27 +18,13 @@ pub unsafe fn lzma_block_buffer_decode(
     {
         return LZMA_PROG_ERROR;
     }
-    let mut block_decoder: lzma_next_coder = lzma_next_coder_s {
-        coder: core::ptr::null_mut(),
-        id: LZMA_VLI_UNKNOWN,
-        init: 0,
-        code: None,
-        end: None,
-        get_progress: None,
-        get_check: None,
-        memconfig: None,
-        update: None,
-        set_out_limit: None,
-    };
+    let mut block_decoder: lzma_next_coder = LZMA_NEXT_CODER_INIT;
     let mut ret: lzma_ret =
         lzma_block_decoder_init(::core::ptr::addr_of_mut!(block_decoder), allocator, block);
     if ret == LZMA_OK {
-        debug_assert!(block_decoder.code.is_some());
-        let code = block_decoder.code.unwrap_unchecked();
         let in_start: size_t = *in_pos;
         let out_start: size_t = *out_pos;
-        ret = code(
-            block_decoder.coder,
+        ret = block_decoder.code(
             allocator,
             input,
             in_pos,
