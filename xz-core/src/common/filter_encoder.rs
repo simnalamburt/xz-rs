@@ -286,7 +286,7 @@ pub fn lzma_filter_encoder_is_supported(id: lzma_vli) -> lzma_bool {
     !encoder_find(id).is_null() as lzma_bool
 }
 pub unsafe fn lzma_filters_update(strm: &mut lzma_stream, filters: *const lzma_filter) -> lzma_ret {
-    if (*(*strm).internal).next.update.is_none() {
+    if !(*(*strm).internal).next.can_update() {
         return LZMA_PROG_ERROR;
     }
     if lzma_raw_encoder_memusage(filters) == UINT64_MAX {
@@ -310,10 +310,7 @@ pub unsafe fn lzma_filters_update(strm: &mut lzma_stream, filters: *const lzma_f
     }
     (*reversed_filter_slot(::core::ptr::addr_of_mut!(reversed_filters), count as usize)).id =
         LZMA_VLI_UNKNOWN;
-    debug_assert!((*(*strm).internal).next.update.is_some());
-    let update = (*(*strm).internal).next.update.unwrap_unchecked();
-    update(
-        (*(*strm).internal).next.coder,
+    (*(*strm).internal).next.update(
         crate::common::common::lzma_stream_allocator(strm),
         filters,
         ::core::ptr::addr_of_mut!(reversed_filters) as *mut lzma_filter,

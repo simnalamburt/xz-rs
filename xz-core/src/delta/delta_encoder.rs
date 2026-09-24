@@ -1,3 +1,4 @@
+use crate::delta::delta_common::{DeltaCoder, delta_coder_end};
 use crate::types::*;
 fn copy_and_encode(coder: &mut lzma_delta_coder, input: &[u8], output: &mut [u8]) {
     let distance: size_t = coder.distance;
@@ -25,7 +26,7 @@ fn encode_in_place(coder: &mut lzma_delta_coder, buffer: &mut [u8]) {
     }
 }
 unsafe fn delta_encode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_delta_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -35,67 +36,54 @@ unsafe fn delta_encode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: &mut lzma_delta_coder = &mut *(coder_ptr as *mut lzma_delta_coder);
-    match coder.next.code {
-        None => {
-            debug_assert!(in_size >= *in_pos);
-            debug_assert!(out_size >= *out_pos);
-            let in_avail: size_t = in_size - *in_pos;
-            let out_avail: size_t = out_size - *out_pos;
-            let size: size_t = if in_avail < out_avail {
-                in_avail
-            } else {
-                out_avail
-            };
-            if size > 0 {
-                copy_and_encode(
-                    coder,
-                    core::slice::from_raw_parts(input.add(*in_pos), size),
-                    core::slice::from_raw_parts_mut(out.add(*out_pos), size),
-                );
-            }
-            *in_pos += size;
-            *out_pos += size;
-            if action != LZMA_RUN && *in_pos == in_size {
-                LZMA_STREAM_END
-            } else {
-                LZMA_OK
-            }
-        }
-        Some(code) => {
-            let out_start: size_t = *out_pos;
-            let ret = code(
-                coder.next.coder,
-                allocator,
-                input,
-                in_pos,
-                in_size,
-                out,
-                out_pos,
-                out_size,
-                action,
+    if coder.next.coder.is_none() {
+        debug_assert!(in_size >= *in_pos);
+        debug_assert!(out_size >= *out_pos);
+        let in_avail: size_t = in_size - *in_pos;
+        let out_avail: size_t = out_size - *out_pos;
+        let size: size_t = if in_avail < out_avail {
+            in_avail
+        } else {
+            out_avail
+        };
+        if size > 0 {
+            copy_and_encode(
+                coder,
+                core::slice::from_raw_parts(input.add(*in_pos), size),
+                core::slice::from_raw_parts_mut(out.add(*out_pos), size),
             );
-            debug_assert!(*out_pos >= out_start);
-            let size_0: size_t = *out_pos - out_start;
-            if size_0 > 0 {
-                encode_in_place(
-                    coder,
-                    core::slice::from_raw_parts_mut(out.add(out_start), size_0),
-                );
-            }
-            ret
         }
+        *in_pos += size;
+        *out_pos += size;
+        if action != LZMA_RUN && *in_pos == in_size {
+            LZMA_STREAM_END
+        } else {
+            LZMA_OK
+        }
+    } else {
+        let out_start: size_t = *out_pos;
+        let ret = coder.next.code(
+            allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        );
+        debug_assert!(*out_pos >= out_start);
+        let size_0: size_t = *out_pos - out_start;
+        if size_0 > 0 {
+            encode_in_place(
+                coder,
+                core::slice::from_raw_parts_mut(out.add(out_start), size_0),
+            );
+        }
+        ret
     }
 }
 unsafe fn delta_encoder_update(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_delta_coder,
     allocator: *const lzma_allocator,
     _filters_null: *const lzma_filter,
     reversed_filters: *const lzma_filter,
 ) -> lzma_ret {
-    let coder: *mut lzma_delta_coder = coder_ptr as *mut lzma_delta_coder;
     lzma_next_filter_update(
-        ::core::ptr::addr_of_mut!((*coder).next),
+        ::core::ptr::addr_of_mut!(coder.next),
         allocator,
         reversed_filters.offset(1),
     )
@@ -105,30 +93,56 @@ pub(crate) unsafe fn lzma_delta_encoder_init(
     allocator: *const lzma_allocator,
     filters: *const lzma_filter_info,
 ) -> lzma_ret {
-    (*next).code = Some(
-        delta_encode
-            as unsafe fn(
-                *mut c_void,
-                *const lzma_allocator,
-                *const u8,
-                *mut size_t,
-                size_t,
-                *mut u8,
-                *mut size_t,
-                size_t,
-                lzma_action,
-            ) -> lzma_ret,
-    );
-    (*next).update = Some(
-        delta_encoder_update
-            as unsafe fn(
-                *mut c_void,
-                *const lzma_allocator,
-                *const lzma_filter,
-                *const lzma_filter,
-            ) -> lzma_ret,
-    );
-    lzma_delta_coder_init(next, allocator, filters)
+    lzma_delta_coder_init::<lzma_delta_encoder>(next, allocator, filters)
+}
+#[repr(transparent)]
+pub(crate) struct lzma_delta_encoder(lzma_delta_coder);
+impl DeltaCoder for lzma_delta_encoder {
+    fn wrap(coder: lzma_delta_coder) -> Self {
+        Self(coder)
+    }
+    fn delta(&mut self) -> &mut lzma_delta_coder {
+        &mut self.0
+    }
+}
+impl NextCoder for lzma_delta_encoder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        delta_encode(
+            &mut self.0,
+            allocator,
+            input,
+            in_pos,
+            in_size,
+            out,
+            out_pos,
+            out_size,
+            action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        delta_coder_end(self, allocator)
+    }
+    fn can_update(&self) -> bool {
+        true
+    }
+    unsafe fn update(
+        &mut self,
+        allocator: *const lzma_allocator,
+        filters: *const lzma_filter,
+        reversed_filters: *const lzma_filter,
+    ) -> lzma_ret {
+        delta_encoder_update(&mut self.0, allocator, filters, reversed_filters)
+    }
 }
 pub(crate) unsafe fn lzma_delta_props_encode(options: *const c_void, out: *mut u8) -> lzma_ret {
     if lzma_delta_coder_memusage(options) == UINT64_MAX {

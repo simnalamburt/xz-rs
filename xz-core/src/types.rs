@@ -37,10 +37,9 @@ pub struct lzma_filter {
 }
 pub use crate::common::common_types::{
     ISEQ_END, ISEQ_ERROR, ISEQ_FINISH, ISEQ_FULL_BARRIER, ISEQ_FULL_FLUSH, ISEQ_RUN,
-    ISEQ_SYNC_FLUSH, LZMA_MEMUSAGE_BASE, LZMA_SUPPORTED_FLAGS, LZMA_THREADS_MAX,
-    lzma_code_function, lzma_end_function, lzma_filter_info, lzma_filter_info_s,
-    lzma_init_function, lzma_internal, lzma_internal_s, lzma_internal_sequence, lzma_next_coder,
-    lzma_next_coder_s,
+    ISEQ_SYNC_FLUSH, LZMA_MEMUSAGE_BASE, LZMA_NEXT_CODER_INIT, LZMA_SUPPORTED_FLAGS,
+    LZMA_THREADS_MAX, NextCoder, lzma_filter_info, lzma_filter_info_s, lzma_init_function,
+    lzma_internal, lzma_internal_s, lzma_internal_sequence, lzma_next_coder, lzma_next_coder_s,
 };
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -407,28 +406,7 @@ pub struct lzma_dict {
     pub has_wrapped: bool,
     pub need_reset: bool,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct lzma_lz_decoder {
-    pub coder: *mut c_void,
-    pub code: lzma_lz_decoder_code_function,
-    pub reset: Option<unsafe fn(*mut c_void, *const c_void) -> ()>,
-    pub set_uncompressed: Option<unsafe fn(*mut c_void, lzma_vli, bool) -> ()>,
-    pub end: Option<unsafe fn(*mut c_void, *const lzma_allocator) -> ()>,
-}
-pub type lzma_lz_decoder_code_function =
-    unsafe fn(*mut c_void, *mut lzma_dict, *const u8, *mut size_t, size_t) -> lzma_ret;
-
-#[cold]
-pub unsafe fn lzma_lz_decoder_code_uninitialized(
-    _coder: *mut c_void,
-    _dict: *mut lzma_dict,
-    _input: *const u8,
-    _in_pos: *mut size_t,
-    _in_size: size_t,
-) -> lzma_ret {
-    panic!("uninitialized LZ decoder callback")
-}
+pub use crate::lz::lz_decoder::lzma_lz_decoder;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -485,28 +463,7 @@ pub struct lzma_delta_coder {
     pub pos: u8,
     pub history: [u8; LZMA_DELTA_DIST_MAX as usize],
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct lzma_lz_encoder {
-    pub coder: *mut c_void,
-    pub code: lzma_lz_encoder_code_function,
-    pub end: Option<unsafe fn(*mut c_void, *const lzma_allocator) -> ()>,
-    pub options_update: Option<unsafe fn(*mut c_void, *const lzma_filter) -> lzma_ret>,
-    pub set_out_limit: Option<unsafe fn(*mut c_void, *mut u64, u64) -> lzma_ret>,
-}
-pub type lzma_lz_encoder_code_function =
-    unsafe fn(*mut c_void, *mut lzma_mf, *mut u8, *mut size_t, size_t) -> lzma_ret;
-
-#[cold]
-pub unsafe fn lzma_lz_encoder_code_uninitialized(
-    _coder: *mut c_void,
-    _mf: *mut lzma_mf,
-    _out: *mut u8,
-    _out_pos: *mut size_t,
-    _out_size: size_t,
-) -> lzma_ret {
-    panic!("uninitialized LZ encoder callback")
-}
+pub use crate::lz::lz_encoder::lzma_lz_encoder;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct lzma_outbuf_s {
@@ -1172,7 +1129,7 @@ pub use crate::common::threading::{
 pub use crate::common::vli_decoder::lzma_vli_decode;
 pub use crate::common::vli_encoder::lzma_vli_encode;
 pub use crate::common::vli_size::lzma_vli_size;
-pub use crate::delta::delta_common::lzma_delta_coder_init;
+pub(crate) use crate::delta::delta_common::lzma_delta_coder_init;
 pub(crate) use crate::delta::delta_common::lzma_delta_coder_memusage;
 pub use crate::lz::lz_encoder_mf::{lzma_mf_find, lzma_mf_find_raw};
 pub use crate::lzma::fastpos_table::lzma_fastpos;

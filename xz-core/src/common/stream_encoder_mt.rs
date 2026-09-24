@@ -151,7 +151,7 @@ unsafe fn worker_encode(
     ret = lzma_block_encoder_init(
         ::core::ptr::addr_of_mut!((*thr).block_encoder),
         worker_allocator(thr),
-        ::core::ptr::addr_of_mut!((*thr).block_options),
+        &mut (*thr).block_options,
     );
     if ret != LZMA_OK {
         worker_error(thr, ret);
@@ -201,15 +201,11 @@ unsafe fn worker_encode(
             in_limit = in_pos + IN_CHUNK_MAX;
             action = LZMA_RUN;
         }
-        let code = match (*thr).block_encoder.code {
-            Some(code) => code,
-            None => {
-                worker_error(thr, LZMA_PROG_ERROR);
-                return THR_STOP;
-            }
-        };
-        ret = code(
-            (*thr).block_encoder.coder,
+        if (*thr).block_encoder.coder.is_none() {
+            worker_error(thr, LZMA_PROG_ERROR);
+            return THR_STOP;
+        }
+        ret = (*thr).block_encoder.code(
             worker_allocator(thr),
             (*thr).in_0,
             ::core::ptr::addr_of_mut!(in_pos),
@@ -267,7 +263,7 @@ unsafe fn worker_encode(
             }
             *out_pos = 0;
             ret = lzma_block_uncomp_encode(
-                ::core::ptr::addr_of_mut!((*thr).block_options),
+                &mut (*thr).block_options,
                 (*thr).in_0,
                 in_size,
                 ::core::ptr::addr_of_mut!((*(*thr).outbuf).buf) as *mut u8,
@@ -284,8 +280,7 @@ unsafe fn worker_encode(
             return THR_STOP;
         }
     }
-    (*(*thr).outbuf).unpadded_size =
-        lzma_block_unpadded_size(::core::ptr::addr_of_mut!((*thr).block_options));
+    (*(*thr).outbuf).unpadded_size = lzma_block_unpadded_size(&(*thr).block_options);
     (*(*thr).outbuf).uncompressed_size = (*thr).block_options.uncompressed_size;
     THR_FINISH
 }
@@ -504,18 +499,7 @@ unsafe fn initialize_new_thread(
             (*thr).coder = coder;
             (*thr).progress_in = 0;
             (*thr).progress_out = 0;
-            (*thr).block_encoder = lzma_next_coder_s {
-                coder: core::ptr::null_mut(),
-                id: LZMA_VLI_UNKNOWN,
-                init: 0,
-                code: None,
-                end: None,
-                get_progress: None,
-                get_check: None,
-                memconfig: None,
-                update: None,
-                set_out_limit: None,
-            };
+            (*thr).block_encoder = LZMA_NEXT_CODER_INIT;
             (*thr).filters[0].id = LZMA_VLI_UNKNOWN;
             if mythread_create(
                 ::core::ptr::addr_of_mut!((*thr).thread_id),
@@ -796,7 +780,12 @@ unsafe fn stream_encode_mt_blocks(
             mythread_i_747 = 1;
         }
         if ret == LZMA_STREAM_END {
-            ret = lzma_index_append((*coder).index, allocator, unpadded_size, uncompressed_size);
+            ret = lzma_index_append(
+                &mut *(*coder).index,
+                allocator,
+                unpadded_size,
+                uncompressed_size,
+            );
             if ret != LZMA_OK {
                 threads_stop(coder, false);
                 return ret;
@@ -845,7 +834,7 @@ unsafe fn stream_encode_mt_blocks(
     let ret_: lzma_ret = lzma_index_encoder_init(
         ::core::ptr::addr_of_mut!((*coder).index_encoder),
         allocator,
-        (*coder).index,
+        &*(*coder).index,
     );
     if ret_ != LZMA_OK {
         return ret_;
@@ -864,11 +853,10 @@ unsafe fn stream_encode_mt_index(
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
-    let Some(code) = (*coder).index_encoder.code else {
+    if (*coder).index_encoder.coder.is_none() {
         return LZMA_PROG_ERROR;
-    };
-    let ret: lzma_ret = code(
-        (*coder).index_encoder.coder,
+    }
+    let ret: lzma_ret = (*coder).index_encoder.code(
         allocator,
         core::ptr::null(),
         core::ptr::null_mut(),
@@ -890,7 +878,7 @@ unsafe fn stream_encode_mt_index(
 }
 
 unsafe fn stream_encode_mt(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_stream_coder,
     allocator: *const lzma_allocator,
     in_0: *const u8,
     in_pos: *mut size_t,
@@ -900,27 +888,26 @@ unsafe fn stream_encode_mt(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
-    match (*coder).sequence {
+    match coder.sequence {
         SEQ_STREAM_HEADER => {
             lzma_bufcpy(
-                ::core::ptr::addr_of_mut!((*coder).header) as *mut u8,
-                ::core::ptr::addr_of_mut!((*coder).header_pos),
+                ::core::ptr::addr_of_mut!(coder.header) as *mut u8,
+                ::core::ptr::addr_of_mut!(coder.header_pos),
                 core::mem::size_of::<[u8; 12]>(),
                 out,
                 out_pos,
                 out_size,
             );
-            if (*coder).header_pos < core::mem::size_of::<[u8; 12]>() {
+            if coder.header_pos < core::mem::size_of::<[u8; 12]>() {
                 return LZMA_OK;
             }
-            (*coder).header_pos = 0;
-            (*coder).sequence = SEQ_BLOCK;
+            coder.header_pos = 0;
+            coder.sequence = SEQ_BLOCK;
         }
         SEQ_BLOCK | SEQ_INDEX | SEQ_STREAM_FOOTER => {}
         _ => return LZMA_PROG_ERROR,
     }
-    if (*coder).sequence == SEQ_BLOCK {
+    if coder.sequence == SEQ_BLOCK {
         let ret: lzma_ret = stream_encode_mt_blocks(
             coder, allocator, in_0, in_pos, in_size, out, out_pos, out_size, action,
         );
@@ -929,59 +916,59 @@ unsafe fn stream_encode_mt(
         }
         // FullFlush/FullBarrier complete while staying in SEQ_BLOCK. Only
         // Finish advances to SEQ_INDEX and should fall through below.
-        if (*coder).sequence == SEQ_BLOCK {
+        if coder.sequence == SEQ_BLOCK {
             return LZMA_STREAM_END;
         }
     }
-    if (*coder).sequence == SEQ_INDEX {
+    if coder.sequence == SEQ_INDEX {
         let ret: lzma_ret = stream_encode_mt_index(coder, allocator, out, out_pos, out_size);
         if ret != LZMA_STREAM_END {
             return ret;
         }
     }
     lzma_bufcpy(
-        ::core::ptr::addr_of_mut!((*coder).header) as *mut u8,
-        ::core::ptr::addr_of_mut!((*coder).header_pos),
+        ::core::ptr::addr_of_mut!(coder.header) as *mut u8,
+        ::core::ptr::addr_of_mut!(coder.header_pos),
         core::mem::size_of::<[u8; 12]>(),
         out,
         out_pos,
         out_size,
     );
-    if (*coder).header_pos < core::mem::size_of::<[u8; 12]>() {
+    if coder.header_pos < core::mem::size_of::<[u8; 12]>() {
         LZMA_OK
     } else {
         LZMA_STREAM_END
     }
 }
-unsafe fn stream_encoder_mt_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
+unsafe fn stream_encoder_mt_end(coder: &mut lzma_stream_coder, allocator: *const lzma_allocator) {
     threads_end(coder, allocator);
-    lzma_outq_end(::core::ptr::addr_of_mut!((*coder).outq), allocator);
+    lzma_outq_end(::core::ptr::addr_of_mut!(coder.outq), allocator);
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters) as *mut lzma_filter,
         allocator,
     );
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters_cache) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters_cache) as *mut lzma_filter,
         allocator,
     );
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).index_encoder), allocator);
-    lzma_index_end((*coder).index, allocator);
-    mythread_cond_destroy(::core::ptr::addr_of_mut!((*coder).cond));
-    mythread_mutex_destroy(::core::ptr::addr_of_mut!((*coder).mutex));
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.index_encoder), allocator);
+    if !coder.index.is_null() {
+        lzma_index_end(&mut *coder.index, allocator);
+    }
+    mythread_cond_destroy(::core::ptr::addr_of_mut!(coder.cond));
+    mythread_mutex_destroy(::core::ptr::addr_of_mut!(coder.mutex));
     crate::alloc::internal_free(coder, allocator);
 }
 unsafe fn stream_encoder_mt_update(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_stream_coder,
     allocator: *const lzma_allocator,
     filters: *const lzma_filter,
     _reversed_filters: *const lzma_filter,
 ) -> lzma_ret {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
-    if (*coder).sequence > SEQ_BLOCK {
+    if coder.sequence > SEQ_BLOCK {
         return LZMA_PROG_ERROR;
     }
-    if !(*coder).thr.is_null() {
+    if !coder.thr.is_null() {
         return LZMA_PROG_ERROR;
     }
     if lzma_raw_encoder_memusage(filters) == UINT64_MAX {
@@ -1000,43 +987,40 @@ unsafe fn stream_encoder_mt_update(
         return ret_;
     }
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters) as *mut lzma_filter,
         allocator,
     );
     lzma_filters_free(
-        ::core::ptr::addr_of_mut!((*coder).filters_cache) as *mut lzma_filter,
+        ::core::ptr::addr_of_mut!(coder.filters_cache) as *mut lzma_filter,
         allocator,
     );
     core::ptr::copy_nonoverlapping(
         ::core::ptr::addr_of_mut!(temp) as *const u8,
-        ::core::ptr::addr_of_mut!((*coder).filters) as *mut u8,
+        ::core::ptr::addr_of_mut!(coder.filters) as *mut u8,
         core::mem::size_of::<[lzma_filter; 5]>(),
     );
     LZMA_OK
 }
 unsafe fn get_options(
-    options: *const lzma_mt,
+    options: &lzma_mt,
     opt_easy: *mut lzma_options_easy,
     filters: *mut *const lzma_filter,
     block_size: *mut u64,
     outbuf_size_max: *mut u64,
 ) -> lzma_ret {
-    if options.is_null() {
-        return LZMA_PROG_ERROR;
-    }
-    if (*options).flags != 0 || (*options).threads == 0 || (*options).threads > LZMA_THREADS_MAX {
+    if options.flags != 0 || options.threads == 0 || options.threads > LZMA_THREADS_MAX {
         return LZMA_OPTIONS_ERROR;
     }
-    if !(*options).filters.is_null() {
-        *filters = (*options).filters;
+    if !options.filters.is_null() {
+        *filters = options.filters;
     } else {
-        if lzma_easy_preset(c_mut(opt_easy), (*options).preset) {
+        if lzma_easy_preset(c_mut(opt_easy), options.preset) {
             return LZMA_OPTIONS_ERROR;
         }
         *filters = ::core::ptr::addr_of_mut!((*opt_easy).filters) as *mut lzma_filter;
     }
-    if (*options).block_size > 0 {
-        *block_size = (*options).block_size;
+    if options.block_size > 0 {
+        *block_size = options.block_size;
     } else {
         *block_size = lzma_mt_block_size(*filters);
     }
@@ -1049,40 +1033,39 @@ unsafe fn get_options(
     }
     LZMA_OK
 }
-unsafe fn get_progress(coder_ptr: *mut c_void, progress_in: &mut u64, progress_out: &mut u64) {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
+unsafe fn get_progress(
+    coder: &mut lzma_stream_coder,
+    progress_in: &mut u64,
+    progress_out: &mut u64,
+) {
     let mut mythread_i_1010: c_uint = 0;
     while if mythread_i_1010 != 0 {
-        mythread_mutex_unlock(::core::ptr::addr_of_mut!((*coder).mutex));
+        mythread_mutex_unlock(::core::ptr::addr_of_mut!(coder.mutex));
         0
     } else {
-        mythread_mutex_lock(::core::ptr::addr_of_mut!((*coder).mutex));
+        mythread_mutex_lock(::core::ptr::addr_of_mut!(coder.mutex));
         1
     } != 0
     {
         let mut mythread_j_1010: c_uint = 0;
         while mythread_j_1010 == 0 {
-            *progress_in = (*coder).progress_in;
-            *progress_out = (*coder).progress_out;
+            *progress_in = coder.progress_in;
+            *progress_out = coder.progress_out;
             let mut i: size_t = 0;
-            while i < (*coder).threads_initialized as size_t {
+            while i < coder.threads_initialized as size_t {
                 let mut mythread_i_1015: c_uint = 0;
                 while if mythread_i_1015 != 0 {
-                    mythread_mutex_unlock(::core::ptr::addr_of_mut!(
-                        (*(*coder).threads.add(i)).mutex
-                    ));
+                    mythread_mutex_unlock(::core::ptr::addr_of_mut!((*coder.threads.add(i)).mutex));
                     0
                 } else {
-                    mythread_mutex_lock(::core::ptr::addr_of_mut!(
-                        (*(*coder).threads.add(i)).mutex
-                    ));
+                    mythread_mutex_lock(::core::ptr::addr_of_mut!((*coder.threads.add(i)).mutex));
                     1
                 } != 0
                 {
                     let mut mythread_j_1015: c_uint = 0;
                     while mythread_j_1015 == 0 {
-                        *progress_in += (*(*coder).threads.add(i)).progress_in;
-                        *progress_out += (*(*coder).threads.add(i)).progress_out;
+                        *progress_in += (*coder.threads.add(i)).progress_in;
+                        *progress_out += (*coder.threads.add(i)).progress_out;
                         mythread_j_1015 = 1;
                     }
                     mythread_i_1015 = 1;
@@ -1103,57 +1086,21 @@ unsafe fn stream_encoder_mt_create_coder(
     if coder.is_null() {
         return core::ptr::null_mut();
     }
-    (*next).coder = coder as *mut c_void;
+    (*next).set_coder(coder);
     if mythread_mutex_init(::core::ptr::addr_of_mut!((*coder).mutex)) != 0 {
         crate::alloc::internal_free(coder, allocator);
-        (*next).coder = core::ptr::null_mut();
+        (*next).coder = None;
         return core::ptr::null_mut();
     }
     if mythread_cond_init(::core::ptr::addr_of_mut!((*coder).cond)) != 0 {
         mythread_mutex_destroy(::core::ptr::addr_of_mut!((*coder).mutex));
         crate::alloc::internal_free(coder, allocator);
-        (*next).coder = core::ptr::null_mut();
+        (*next).coder = None;
         return core::ptr::null_mut();
     }
-    (*next).code = Some(
-        stream_encode_mt
-            as unsafe fn(
-                *mut c_void,
-                *const lzma_allocator,
-                *const u8,
-                *mut size_t,
-                size_t,
-                *mut u8,
-                *mut size_t,
-                size_t,
-                lzma_action,
-            ) -> lzma_ret,
-    );
-    (*next).end = Some(stream_encoder_mt_end as unsafe fn(*mut c_void, *const lzma_allocator));
-    (*next).get_progress = Some(get_progress as unsafe fn(*mut c_void, &mut u64, &mut u64) -> ());
-    (*next).update = Some(
-        stream_encoder_mt_update
-            as unsafe fn(
-                *mut c_void,
-                *const lzma_allocator,
-                *const lzma_filter,
-                *const lzma_filter,
-            ) -> lzma_ret,
-    );
     (*coder).filters[0].id = LZMA_VLI_UNKNOWN;
     (*coder).filters_cache[0].id = LZMA_VLI_UNKNOWN;
-    (*coder).index_encoder = lzma_next_coder_s {
-        coder: core::ptr::null_mut(),
-        id: LZMA_VLI_UNKNOWN,
-        init: 0,
-        code: None,
-        end: None,
-        get_progress: None,
-        get_check: None,
-        memconfig: None,
-        update: None,
-        set_out_limit: None,
-    };
+    (*coder).index_encoder = LZMA_NEXT_CODER_INIT;
     (*coder).index = core::ptr::null_mut();
     core::ptr::write_bytes(
         ::core::ptr::addr_of_mut!((*coder).outq) as *mut u8,
@@ -1164,6 +1111,43 @@ unsafe fn stream_encoder_mt_create_coder(
     (*coder).threads_max = 0;
     (*coder).threads_initialized = 0;
     coder
+}
+impl NextCoder for lzma_stream_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        stream_encode_mt(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        stream_encoder_mt_end(self, allocator)
+    }
+    unsafe fn get_progress(&mut self) -> Option<(u64, u64)> {
+        let mut progress_in = 0;
+        let mut progress_out = 0;
+        get_progress(self, &mut progress_in, &mut progress_out);
+        Some((progress_in, progress_out))
+    }
+    fn can_update(&self) -> bool {
+        true
+    }
+    unsafe fn update(
+        &mut self,
+        allocator: *const lzma_allocator,
+        filters: *const lzma_filter,
+        reversed_filters: *const lzma_filter,
+    ) -> lzma_ret {
+        stream_encoder_mt_update(self, allocator, filters, reversed_filters)
+    }
 }
 
 #[inline(never)]
@@ -1193,24 +1177,24 @@ unsafe fn stream_encoder_mt_prepare_threads(
 unsafe fn stream_encoder_mt_init(
     next: *mut lzma_next_coder,
     allocator: *const lzma_allocator,
-    options: *const lzma_mt,
+    options: &lzma_mt,
 ) -> lzma_ret {
     if core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret>,
         uintptr_t,
     >(Some(
         stream_encoder_mt_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret,
     )) != (*next).init
     {
         lzma_next_end(next, allocator);
     }
     (*next).init = core::mem::transmute::<
-        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret>,
+        Option<unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret>,
         uintptr_t,
     >(Some(
         stream_encoder_mt_init
-            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, *const lzma_mt) -> lzma_ret,
+            as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, &lzma_mt) -> lzma_ret,
     ));
     let mut easy: lzma_options_easy = lzma_options_easy {
         filters: [lzma_filter {
@@ -1264,13 +1248,13 @@ unsafe fn stream_encoder_mt_init(
     if lzma_raw_encoder_memusage(filters) == UINT64_MAX {
         return LZMA_OPTIONS_ERROR;
     }
-    if (*options).check as c_uint > LZMA_CHECK_ID_MAX as c_uint {
+    if options.check as c_uint > LZMA_CHECK_ID_MAX as c_uint {
         return LZMA_PROG_ERROR;
     }
-    if lzma_check_is_supported((*options).check) == 0 {
+    if lzma_check_is_supported(options.check) == 0 {
         return LZMA_UNSUPPORTED_CHECK;
     }
-    let mut coder: *mut lzma_stream_coder = (*next).coder as *mut lzma_stream_coder;
+    let mut coder: *mut lzma_stream_coder = (*next).coder_as::<lzma_stream_coder>();
     if coder.is_null() {
         coder = stream_encoder_mt_create_coder(next, allocator);
         if coder.is_null() {
@@ -1282,19 +1266,19 @@ unsafe fn stream_encoder_mt_init(
     (*coder).outbuf_alloc_size = outbuf_size_max as size_t;
     (*coder).thread_error = LZMA_OK;
     (*coder).thr = core::ptr::null_mut();
-    let ret__0: lzma_ret = stream_encoder_mt_prepare_threads(coder, allocator, (*options).threads);
+    let ret__0: lzma_ret = stream_encoder_mt_prepare_threads(coder, allocator, options.threads);
     if ret__0 != LZMA_OK {
         return ret__0;
     }
     let ret__1: lzma_ret = lzma_outq_init(
         ::core::ptr::addr_of_mut!((*coder).outq),
         allocator,
-        (*options).threads,
+        options.threads,
     );
     if ret__1 != LZMA_OK {
         return ret__1;
     }
-    (*coder).timeout = (*options).timeout;
+    (*coder).timeout = options.timeout;
     lzma_filters_free(
         ::core::ptr::addr_of_mut!((*coder).filters) as *mut lzma_filter,
         allocator,
@@ -1311,13 +1295,15 @@ unsafe fn stream_encoder_mt_init(
     if ret__2 != LZMA_OK {
         return ret__2;
     }
-    lzma_index_end((*coder).index, allocator);
+    if !(*coder).index.is_null() {
+        lzma_index_end(&mut *(*coder).index, allocator);
+    }
     (*coder).index = lzma_index_init(allocator);
     if (*coder).index.is_null() {
         return LZMA_MEM_ERROR;
     }
     (*coder).stream_flags.version = 0;
-    (*coder).stream_flags.check = (*options).check;
+    (*coder).stream_flags.check = options.check;
     let ret__3: lzma_ret = lzma_stream_header_encode(&(*coder).stream_flags, &mut (*coder).header);
     if ret__3 != LZMA_OK {
         return ret__3;
@@ -1327,7 +1313,7 @@ unsafe fn stream_encoder_mt_init(
     (*coder).progress_out = LZMA_STREAM_HEADER_SIZE as u64;
     LZMA_OK
 }
-pub unsafe fn lzma_stream_encoder_mt(strm: &mut lzma_stream, options: *const lzma_mt) -> lzma_ret {
+pub unsafe fn lzma_stream_encoder_mt(strm: &mut lzma_stream, options: &lzma_mt) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);
     if ret_ != LZMA_OK {
         return ret_;
@@ -1347,7 +1333,7 @@ pub unsafe fn lzma_stream_encoder_mt(strm: &mut lzma_stream, options: *const lzm
     (*(*strm).internal).supported_actions[LZMA_FINISH as usize] = true;
     LZMA_OK
 }
-pub unsafe fn lzma_stream_encoder_mt_memusage(options: *const lzma_mt) -> u64 {
+pub unsafe fn lzma_stream_encoder_mt_memusage(options: &lzma_mt) -> u64 {
     let mut easy: lzma_options_easy = lzma_options_easy {
         filters: [lzma_filter {
             id: 0,
@@ -1393,21 +1379,20 @@ pub unsafe fn lzma_stream_encoder_mt_memusage(options: *const lzma_mt) -> u64 {
     {
         return UINT64_MAX;
     }
-    let inbuf_memusage: u64 = ((*options).threads as u64).wrapping_mul(block_size);
+    let inbuf_memusage: u64 = (options.threads as u64).wrapping_mul(block_size);
     let mut filters_memusage: u64 = lzma_raw_encoder_memusage(filters);
     if filters_memusage == UINT64_MAX {
         return UINT64_MAX;
     }
-    filters_memusage = filters_memusage.wrapping_mul((*options).threads as u64);
-    let outq_memusage: u64 = lzma_outq_memusage(outbuf_size_max, (*options).threads) as u64;
+    filters_memusage = filters_memusage.wrapping_mul(options.threads as u64);
+    let outq_memusage: u64 = lzma_outq_memusage(outbuf_size_max, options.threads) as u64;
     if outq_memusage == UINT64_MAX {
         return UINT64_MAX;
     }
     let mut total_memusage: u64 = (LZMA_MEMUSAGE_BASE)
         .wrapping_add(core::mem::size_of::<lzma_stream_coder>() as u64)
         .wrapping_add(
-            ((*options).threads as usize).wrapping_mul(core::mem::size_of::<worker_thread>())
-                as u64,
+            (options.threads as usize).wrapping_mul(core::mem::size_of::<worker_thread>()) as u64,
         );
     if (UINT64_MAX).wrapping_sub(total_memusage) < inbuf_memusage {
         return UINT64_MAX;

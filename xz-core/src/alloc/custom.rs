@@ -170,6 +170,10 @@ pub(crate) unsafe fn internal_free<T>(ptr: *mut T, allocator: *const lzma_alloca
     unsafe { internal_free_bytes(ptr.cast(), 0, allocator) };
 }
 
+pub(crate) unsafe fn internal_free_dyn<T: ?Sized>(ptr: *mut T, allocator: *const lzma_allocator) {
+    unsafe { internal_free_bytes(ptr.cast(), 0, allocator) };
+}
+
 pub(crate) unsafe fn internal_free_array<T>(
     ptr: *mut T,
     _count: size_t,

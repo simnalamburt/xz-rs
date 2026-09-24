@@ -101,7 +101,7 @@ pub unsafe fn lzma_stream_buffer_encode(
     };
     if in_size > 0 {
         let ret: lzma_ret = lzma_block_buffer_encode(
-            ::core::ptr::addr_of_mut!(block),
+            &mut block,
             allocator,
             input,
             in_size,
@@ -120,17 +120,17 @@ pub unsafe fn lzma_stream_buffer_encode(
     let mut ret: lzma_ret = LZMA_OK;
     if in_size > 0 {
         ret = lzma_index_append(
-            i,
+            &mut *i,
             allocator,
-            lzma_block_unpadded_size(::core::ptr::addr_of_mut!(block)),
+            lzma_block_unpadded_size(&block),
             block.uncompressed_size,
         );
     }
     if ret == LZMA_OK {
-        ret = lzma_index_buffer_encode(i, out, ::core::ptr::addr_of_mut!(out_pos), out_size);
+        ret = lzma_index_buffer_encode(&*i, out, ::core::ptr::addr_of_mut!(out_pos), out_size);
         stream_flags.backward_size = lzma_index_size(c_ref(i));
     }
-    lzma_index_end(i, allocator);
+    lzma_index_end(&mut *i, allocator);
     if ret != LZMA_OK {
         return ret;
     }

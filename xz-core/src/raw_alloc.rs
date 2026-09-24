@@ -216,6 +216,19 @@ pub(crate) unsafe fn internal_free<T>(ptr: *mut T, _allocator: *const lzma_alloc
     unsafe { dealloc(ptr.cast::<u8>(), layout) };
 }
 
+/// Frees an object whose size and alignment come from the pointer's metadata,
+/// which is how a trait object's state is freed after its `end`.
+pub(crate) unsafe fn internal_free_dyn<T: ?Sized>(ptr: *mut T, _allocator: *const lzma_allocator) {
+    let value = unsafe { Layout::for_value(&*ptr) };
+    if value.size() == 0 {
+        return;
+    }
+    let Some(layout) = raw_layout(value.size(), value.align()) else {
+        return;
+    };
+    unsafe { dealloc(ptr.cast::<u8>(), layout) };
+}
+
 pub(crate) unsafe fn internal_free_array<T>(
     ptr: *mut T,
     count: size_t,

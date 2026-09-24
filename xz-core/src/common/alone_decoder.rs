@@ -18,7 +18,7 @@ pub const SEQ_UNCOMPRESSED_SIZE: alone_decoder_seq = 2;
 pub const SEQ_DICTIONARY_SIZE: alone_decoder_seq = 1;
 pub const SEQ_PROPERTIES: alone_decoder_seq = 0;
 unsafe fn alone_decode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_alone_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -28,85 +28,74 @@ unsafe fn alone_decode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_alone_coder = coder_ptr as *mut lzma_alone_coder;
-    while *out_pos < out_size && ((*coder).sequence == SEQ_CODE || *in_pos < in_size) {
-        match (*coder).sequence {
+    while *out_pos < out_size && (coder.sequence == SEQ_CODE || *in_pos < in_size) {
+        match coder.sequence {
             0 => {
                 if lzma_lzma_lclppb_decode(
-                    ::core::ptr::addr_of_mut!((*coder).options),
+                    ::core::ptr::addr_of_mut!(coder.options),
                     *input.add(*in_pos),
                 ) {
                     return LZMA_FORMAT_ERROR;
                 }
-                (*coder).sequence = SEQ_DICTIONARY_SIZE;
+                coder.sequence = SEQ_DICTIONARY_SIZE;
                 *in_pos += 1;
             }
             1 => {
-                (*coder).options.dict_size = ((*coder).options.dict_size as size_t
-                    | (*input.add(*in_pos) as size_t) << ((*coder).pos * 8))
+                coder.options.dict_size = (coder.options.dict_size as size_t
+                    | (*input.add(*in_pos) as size_t) << (coder.pos * 8))
                     as u32;
-                (*coder).pos += 1;
-                if (*coder).pos == 4 {
-                    if (*coder).picky && (*coder).options.dict_size != UINT32_MAX {
-                        let mut d: u32 = (*coder).options.dict_size.wrapping_sub(1);
+                coder.pos += 1;
+                if coder.pos == 4 {
+                    if coder.picky && coder.options.dict_size != UINT32_MAX {
+                        let mut d: u32 = coder.options.dict_size.wrapping_sub(1);
                         d |= d >> 2;
                         d |= d >> 3;
                         d |= d >> 4;
                         d |= d >> 8;
                         d |= d >> 16;
                         d = d.wrapping_add(1);
-                        if d != (*coder).options.dict_size {
+                        if d != coder.options.dict_size {
                             return LZMA_FORMAT_ERROR;
                         }
                     }
-                    (*coder).pos = 0;
-                    (*coder).sequence = SEQ_UNCOMPRESSED_SIZE;
+                    coder.pos = 0;
+                    coder.sequence = SEQ_UNCOMPRESSED_SIZE;
                 }
                 *in_pos += 1;
             }
             2 => {
-                (*coder).uncompressed_size |=
-                    (*input.add(*in_pos) as lzma_vli) << ((*coder).pos * 8);
+                coder.uncompressed_size |= (*input.add(*in_pos) as lzma_vli) << (coder.pos * 8);
                 *in_pos += 1;
-                (*coder).pos += 1;
-                if (*coder).pos >= 8 {
-                    if (*coder).picky
-                        && (*coder).uncompressed_size != LZMA_VLI_UNKNOWN
-                        && (*coder).uncompressed_size >= 1 << 38
+                coder.pos += 1;
+                if coder.pos >= 8 {
+                    if coder.picky
+                        && coder.uncompressed_size != LZMA_VLI_UNKNOWN
+                        && coder.uncompressed_size >= 1 << 38
                     {
                         return LZMA_FORMAT_ERROR;
                     }
-                    (*coder).options.ext_flags = LZMA_LZMA1EXT_ALLOW_EOPM as u32;
-                    (*coder).options.ext_size_low = (*coder).uncompressed_size as u32;
-                    (*coder).options.ext_size_high = ((*coder).uncompressed_size >> 32) as u32;
-                    (*coder).memusage = lzma_lzma_decoder_memusage_nocheck(
-                        ::core::ptr::addr_of_mut!((*coder).options) as *const c_void,
+                    coder.options.ext_flags = LZMA_LZMA1EXT_ALLOW_EOPM as u32;
+                    coder.options.ext_size_low = coder.uncompressed_size as u32;
+                    coder.options.ext_size_high = (coder.uncompressed_size >> 32) as u32;
+                    coder.memusage = lzma_lzma_decoder_memusage_nocheck(::core::ptr::addr_of_mut!(
+                        coder.options
                     )
+                        as *const c_void)
                     .wrapping_add(LZMA_MEMUSAGE_BASE);
-                    (*coder).pos = 0;
-                    (*coder).sequence = SEQ_CODER_INIT;
+                    coder.pos = 0;
+                    coder.sequence = SEQ_CODER_INIT;
                 }
             }
             3 => {}
             4 => {
-                debug_assert!((*coder).next.code.is_some());
-                let code = (*coder).next.code.unwrap_unchecked();
-                return code(
-                    (*coder).next.coder,
-                    allocator,
-                    input,
-                    in_pos,
-                    in_size,
-                    out,
-                    out_pos,
-                    out_size,
-                    action,
+                return coder.next.code(
+                    allocator, input, in_pos, in_size, out, out_pos, out_size, action,
                 );
             }
             _ => return LZMA_PROG_ERROR,
         }
-        if (*coder).sequence == SEQ_CODER_INIT {
-            if (*coder).memusage > (*coder).memlimit {
+        if coder.sequence == SEQ_CODER_INIT {
+            if coder.memusage > coder.memlimit {
                 return LZMA_MEMLIMIT_ERROR;
             }
             let mut filters: [lzma_filter_info; 2] = [
@@ -120,7 +109,7 @@ unsafe fn alone_decode(
                                 *const lzma_filter_info,
                             ) -> lzma_ret,
                     ),
-                    options: ::core::ptr::addr_of_mut!((*coder).options) as *mut c_void,
+                    options: ::core::ptr::addr_of_mut!(coder.options) as *mut c_void,
                 },
                 lzma_filter_info_s {
                     id: 0,
@@ -129,37 +118,35 @@ unsafe fn alone_decode(
                 },
             ];
             let ret_: lzma_ret = lzma_next_filter_init(
-                ::core::ptr::addr_of_mut!((*coder).next),
+                ::core::ptr::addr_of_mut!(coder.next),
                 allocator,
                 ::core::ptr::addr_of_mut!(filters) as *mut lzma_filter_info,
             );
             if ret_ != LZMA_OK {
                 return ret_;
             }
-            (*coder).sequence = SEQ_CODE;
+            coder.sequence = SEQ_CODE;
         }
     }
     LZMA_OK
 }
-unsafe fn alone_decoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_alone_coder = coder_ptr as *mut lzma_alone_coder;
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).next), allocator);
+unsafe fn alone_decoder_end(coder: &mut lzma_alone_coder, allocator: *const lzma_allocator) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.next), allocator);
     crate::alloc::internal_free(coder, allocator);
 }
 unsafe fn alone_decoder_memconfig(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_alone_coder,
     memusage: *mut u64,
     old_memlimit: *mut u64,
     new_memlimit: u64,
 ) -> lzma_ret {
-    let coder: *mut lzma_alone_coder = coder_ptr as *mut lzma_alone_coder;
-    *memusage = (*coder).memusage;
-    *old_memlimit = (*coder).memlimit;
+    *memusage = coder.memusage;
+    *old_memlimit = coder.memlimit;
     if new_memlimit != 0 {
-        if new_memlimit < (*coder).memusage {
+        if new_memlimit < coder.memusage {
             return LZMA_MEMLIMIT_ERROR;
         }
-        (*coder).memlimit = new_memlimit;
+        coder.memlimit = new_memlimit;
     }
     LZMA_OK
 }
@@ -186,44 +173,14 @@ pub(crate) unsafe fn lzma_alone_decoder_init(
         lzma_alone_decoder_init
             as unsafe fn(*mut lzma_next_coder, *const lzma_allocator, u64, bool) -> lzma_ret,
     ));
-    let mut coder: *mut lzma_alone_coder = (*next).coder as *mut lzma_alone_coder;
+    let mut coder: *mut lzma_alone_coder = (*next).coder_as::<lzma_alone_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_alone_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = Some(
-            alone_decode
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const u8,
-                    *mut size_t,
-                    size_t,
-                    *mut u8,
-                    *mut size_t,
-                    size_t,
-                    lzma_action,
-                ) -> lzma_ret,
-        );
-        (*next).end =
-            Some(alone_decoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
-        (*next).memconfig = Some(
-            alone_decoder_memconfig as unsafe fn(*mut c_void, *mut u64, *mut u64, u64) -> lzma_ret,
-        );
-        (*coder).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).next = LZMA_NEXT_CODER_INIT;
     }
     (*coder).sequence = SEQ_PROPERTIES;
     (*coder).picky = picky;
@@ -235,6 +192,39 @@ pub(crate) unsafe fn lzma_alone_decoder_init(
     (*coder).memlimit = if 1 > memlimit { 1 } else { memlimit };
     (*coder).memusage = LZMA_MEMUSAGE_BASE;
     LZMA_OK
+}
+impl NextCoder for lzma_alone_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        alone_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        alone_decoder_end(self, allocator)
+    }
+    unsafe fn memconfig(
+        &mut self,
+        memusage: *mut u64,
+        old_memlimit: *mut u64,
+        new_memlimit: u64,
+    ) -> Option<lzma_ret> {
+        Some(alone_decoder_memconfig(
+            self,
+            memusage,
+            old_memlimit,
+            new_memlimit,
+        ))
+    }
 }
 pub unsafe fn lzma_alone_decoder(strm: &mut lzma_stream, memlimit: u64) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);

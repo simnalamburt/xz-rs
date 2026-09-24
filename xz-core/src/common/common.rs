@@ -98,36 +98,16 @@ pub unsafe fn lzma_next_filter_update(
     if (*reversed_filters).id == LZMA_VLI_UNKNOWN {
         return LZMA_OK;
     }
-    debug_assert!((*next).update.is_some());
-    let update = (*next).update.unwrap_unchecked();
-    update(
-        (*next).coder,
-        allocator,
-        core::ptr::null(),
-        reversed_filters,
-    )
+    (*next).update(allocator, core::ptr::null(), reversed_filters)
 }
 pub unsafe fn lzma_next_end(next: *mut lzma_next_coder, allocator: *const lzma_allocator) {
     if (*next).init == 0 {
         return;
     }
-    if let Some(end) = (*next).end {
-        end((*next).coder, allocator);
-    } else {
-        crate::alloc::internal_free_untyped((*next).coder, allocator);
+    if let Some(mut coder) = (*next).coder {
+        coder.as_mut().end(allocator);
     }
-    *next = lzma_next_coder_s {
-        coder: core::ptr::null_mut(),
-        id: LZMA_VLI_UNKNOWN,
-        init: 0,
-        code: None,
-        end: None,
-        get_progress: None,
-        get_check: None,
-        memconfig: None,
-        update: None,
-        set_out_limit: None,
-    };
+    *next = LZMA_NEXT_CODER_INIT;
 }
 pub unsafe fn lzma_strm_init(strm: &mut lzma_stream) -> lzma_ret {
     if (*strm).internal.is_null() {
@@ -135,18 +115,7 @@ pub unsafe fn lzma_strm_init(strm: &mut lzma_stream) -> lzma_ret {
         if (*strm).internal.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*(*strm).internal).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*(*strm).internal).next = LZMA_NEXT_CODER_INIT;
     }
     core::ptr::write_bytes(
         ::core::ptr::addr_of_mut!((*(*strm).internal).supported_actions) as *mut u8,
@@ -164,7 +133,7 @@ pub unsafe fn lzma_code(strm: &mut lzma_stream, action: lzma_action) -> lzma_ret
     if (*strm).next_in.is_null() && (*strm).avail_in != 0
         || (*strm).next_out.is_null() && (*strm).avail_out != 0
         || (*strm).internal.is_null()
-        || (*(*strm).internal).next.code.is_none()
+        || (*(*strm).internal).next.coder.is_none()
         || action as c_uint > LZMA_FULL_BARRIER as c_uint
         || !(*(*strm).internal).supported_actions[action as usize]
     {
@@ -223,10 +192,7 @@ pub unsafe fn lzma_code(strm: &mut lzma_stream, action: lzma_action) -> lzma_ret
     }
     let mut in_pos: size_t = 0;
     let mut out_pos: size_t = 0;
-    debug_assert!((*(*strm).internal).next.code.is_some());
-    let code = (*(*strm).internal).next.code.unwrap_unchecked();
-    let mut ret: lzma_ret = code(
-        (*(*strm).internal).next.coder,
+    let mut ret: lzma_ret = (*(*strm).internal).next.code(
         lzma_stream_allocator(strm),
         (*strm).next_in,
         ::core::ptr::addr_of_mut!(in_pos),
@@ -313,11 +279,15 @@ pub unsafe fn lzma_get_progress(
         return;
     }
 
-    if let Some(get_progress) = (*(*strm).internal).next.get_progress {
-        get_progress((*(*strm).internal).next.coder, progress_in, progress_out);
-    } else {
-        *progress_in = (*strm).total_in;
-        *progress_out = (*strm).total_out;
+    match (*(*strm).internal).next.get_progress() {
+        Some((i, o)) => {
+            *progress_in = i;
+            *progress_out = o;
+        }
+        None => {
+            *progress_in = (*strm).total_in;
+            *progress_out = (*strm).total_out;
+        }
     };
 }
 pub unsafe fn lzma_get_check(strm: &lzma_stream) -> lzma_check {
@@ -325,11 +295,10 @@ pub unsafe fn lzma_get_check(strm: &lzma_stream) -> lzma_check {
         if (*strm).internal.is_null() {
             return LZMA_CHECK_NONE;
         }
-        if let Some(get_check) = (*(*strm).internal).next.get_check {
-            get_check((*(*strm).internal).next.coder)
-        } else {
-            LZMA_CHECK_NONE
-        }
+        (*(*strm).internal)
+            .next
+            .get_check()
+            .unwrap_or(LZMA_CHECK_NONE)
     }
 }
 pub unsafe fn lzma_memusage(strm: &lzma_stream) -> u64 {
@@ -339,16 +308,14 @@ pub unsafe fn lzma_memusage(strm: &lzma_stream) -> u64 {
         if (*strm).internal.is_null() {
             return 0;
         }
-        let Some(memconfig) = (*(*strm).internal).next.memconfig else {
-            return 0;
-        };
-        if memconfig(
-            (*(*strm).internal).next.coder,
+        let Some(ret) = (*(*strm).internal).next.memconfig(
             ::core::ptr::addr_of_mut!(memusage),
             ::core::ptr::addr_of_mut!(old_memlimit),
             0,
-        ) != LZMA_OK
-        {
+        ) else {
+            return 0;
+        };
+        if ret != LZMA_OK {
             return 0;
         }
         memusage
@@ -361,16 +328,14 @@ pub unsafe fn lzma_memlimit_get(strm: &lzma_stream) -> u64 {
         if (*strm).internal.is_null() {
             return 0;
         }
-        let Some(memconfig) = (*(*strm).internal).next.memconfig else {
-            return 0;
-        };
-        if memconfig(
-            (*(*strm).internal).next.coder,
+        let Some(ret) = (*(*strm).internal).next.memconfig(
             ::core::ptr::addr_of_mut!(memusage),
             ::core::ptr::addr_of_mut!(old_memlimit),
             0,
-        ) != LZMA_OK
-        {
+        ) else {
+            return 0;
+        };
+        if ret != LZMA_OK {
             return 0;
         }
         old_memlimit
@@ -382,16 +347,15 @@ pub unsafe fn lzma_memlimit_set(strm: &mut lzma_stream, mut new_memlimit: u64) -
     if (*strm).internal.is_null() {
         return LZMA_PROG_ERROR;
     }
-    let Some(memconfig) = (*(*strm).internal).next.memconfig else {
-        return LZMA_PROG_ERROR;
-    };
     if new_memlimit == 0 {
         new_memlimit = 1;
     }
-    memconfig(
-        (*(*strm).internal).next.coder,
+    let Some(ret) = (*(*strm).internal).next.memconfig(
         ::core::ptr::addr_of_mut!(memusage),
         ::core::ptr::addr_of_mut!(old_memlimit),
         new_memlimit,
-    )
+    ) else {
+        return LZMA_PROG_ERROR;
+    };
+    ret
 }

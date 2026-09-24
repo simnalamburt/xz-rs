@@ -11,30 +11,19 @@ unsafe fn copy_or_code(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    match (*coder).next.code {
-        None => {
-            lzma_bufcpy(input, in_pos, in_size, out, out_pos, out_size);
-            if (*coder).is_encoder && action == LZMA_FINISH && *in_pos == in_size {
-                (*coder).end_was_reached = true;
-            }
+    if (*coder).next.coder.is_none() {
+        lzma_bufcpy(input, in_pos, in_size, out, out_pos, out_size);
+        if (*coder).is_encoder && action == LZMA_FINISH && *in_pos == in_size {
+            (*coder).end_was_reached = true;
         }
-        Some(code) => {
-            let ret: lzma_ret = code(
-                (*coder).next.coder,
-                allocator,
-                input,
-                in_pos,
-                in_size,
-                out,
-                out_pos,
-                out_size,
-                action,
-            );
-            if ret == LZMA_STREAM_END {
-                (*coder).end_was_reached = true;
-            } else if ret != LZMA_OK {
-                return ret;
-            }
+    } else {
+        let ret: lzma_ret = (*coder).next.code(
+            allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        );
+        if ret == LZMA_STREAM_END {
+            (*coder).end_was_reached = true;
+        } else if ret != LZMA_OK {
+            return ret;
         }
     }
     LZMA_OK
@@ -51,7 +40,7 @@ unsafe fn call_filter(coder: *mut lzma_simple_coder, buffer: &mut [u8]) -> size_
     filtered
 }
 unsafe fn simple_code(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_simple_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -61,7 +50,6 @@ unsafe fn simple_code(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: &mut lzma_simple_coder = &mut *(coder_ptr as *mut lzma_simple_coder);
     if action == LZMA_SYNC_FLUSH {
         return LZMA_OPTIONS_ERROR;
     }
@@ -170,25 +158,23 @@ unsafe fn simple_code(
     }
     LZMA_OK
 }
-unsafe fn simple_coder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_simple_coder = coder_ptr as *mut lzma_simple_coder;
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).next), allocator);
-    crate::alloc::internal_free_untyped_bytes((*coder).simple, allocator);
+unsafe fn simple_coder_end(coder: &mut lzma_simple_coder, allocator: *const lzma_allocator) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.next), allocator);
+    crate::alloc::internal_free_untyped_bytes(coder.simple, allocator);
     crate::alloc::internal_free_array(
-        coder as *mut u8,
-        core::mem::size_of::<lzma_simple_coder>() + (*coder).allocated,
+        (coder as *mut lzma_simple_coder).cast::<u8>(),
+        core::mem::size_of::<lzma_simple_coder>() + coder.allocated,
         allocator,
     );
 }
 unsafe fn simple_coder_update(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_simple_coder,
     allocator: *const lzma_allocator,
     _filters_null: *const lzma_filter,
     reversed_filters: *const lzma_filter,
 ) -> lzma_ret {
-    let coder: *mut lzma_simple_coder = coder_ptr as *mut lzma_simple_coder;
     lzma_next_filter_update(
-        ::core::ptr::addr_of_mut!((*coder).next),
+        ::core::ptr::addr_of_mut!(coder.next),
         allocator,
         reversed_filters.offset(1),
     )
@@ -203,7 +189,7 @@ pub(crate) unsafe fn lzma_simple_coder_init(
     alignment: u32,
     is_encoder: bool,
 ) -> lzma_ret {
-    let mut coder: *mut lzma_simple_coder = (*next).coder as *mut lzma_simple_coder;
+    let mut coder: *mut lzma_simple_coder = (*next).coder_as::<lzma_simple_coder>();
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_array::<u8>(
             core::mem::size_of::<lzma_simple_coder>() + 2 * unfiltered_max,
@@ -212,43 +198,8 @@ pub(crate) unsafe fn lzma_simple_coder_init(
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = Some(
-            simple_code
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const u8,
-                    *mut size_t,
-                    size_t,
-                    *mut u8,
-                    *mut size_t,
-                    size_t,
-                    lzma_action,
-                ) -> lzma_ret,
-        );
-        (*next).end = Some(simple_coder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
-        (*next).update = Some(
-            simple_coder_update
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const lzma_filter,
-                    *const lzma_filter,
-                ) -> lzma_ret,
-        );
-        (*coder).next = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).next = LZMA_NEXT_CODER_INIT;
         (*coder).filter = filter;
         (*coder).allocated = 2 * unfiltered_max;
         if simple_size > 0 {
@@ -279,4 +230,35 @@ pub(crate) unsafe fn lzma_simple_coder_init(
         allocator,
         filters.offset(1),
     )
+}
+impl NextCoder for lzma_simple_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        simple_code(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        simple_coder_end(self, allocator)
+    }
+    fn can_update(&self) -> bool {
+        true
+    }
+    unsafe fn update(
+        &mut self,
+        allocator: *const lzma_allocator,
+        filters: *const lzma_filter,
+        reversed_filters: *const lzma_filter,
+    ) -> lzma_ret {
+        simple_coder_update(self, allocator, filters, reversed_filters)
+    }
 }

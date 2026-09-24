@@ -7,7 +7,7 @@ use crate::types::*;
 #[repr(C)]
 pub struct lzma_lzma2_coder {
     pub sequence: lzma2_encoder_seq,
-    pub lzma: *mut c_void,
+    pub lzma: *mut lzma_lzma1_encoder,
     pub opt_cur: lzma_options_lzma,
     pub need_properties: bool,
     pub need_state_reset: bool,
@@ -102,16 +102,15 @@ unsafe fn lzma2_header_uncompressed(coder: *mut lzma_lzma2_coder) {
     (*coder).buf[2] = ((*coder).uncompressed_size - 1 & 0xff) as u8;
     (*coder).buf_pos = 0;
 }
-unsafe fn lzma2_encode(
-    coder_ptr: *mut c_void,
+pub(crate) unsafe fn lzma2_encode(
+    coder: &mut lzma_lzma2_coder,
     mf: *mut lzma_mf,
     out: *mut u8,
     out_pos: *mut size_t,
     out_size: size_t,
 ) -> lzma_ret {
-    let coder: *mut lzma_lzma2_coder = coder_ptr as *mut lzma_lzma2_coder;
     while *out_pos < out_size {
-        match (*coder).sequence {
+        match coder.sequence {
             0 => {
                 if mf_unencoded(mf) == 0 {
                     if (*mf).action == LZMA_FINISH {
@@ -124,54 +123,53 @@ unsafe fn lzma2_encode(
                         LZMA_STREAM_END
                     };
                 }
-                if (*coder).need_state_reset {
+                if coder.need_state_reset {
                     let ret_: lzma_ret = lzma_lzma_encoder_reset(
-                        (*coder).lzma as *mut lzma_lzma1_encoder,
-                        ::core::ptr::addr_of_mut!((*coder).opt_cur),
+                        coder.lzma,
+                        ::core::ptr::addr_of_mut!(coder.opt_cur),
                     );
                     if ret_ != LZMA_OK {
                         return ret_;
                     }
                 }
-                (*coder).uncompressed_size = 0;
-                (*coder).compressed_size = 0;
-                (*coder).sequence = SEQ_LZMA_ENCODE;
+                coder.uncompressed_size = 0;
+                coder.compressed_size = 0;
+                coder.sequence = SEQ_LZMA_ENCODE;
             }
             1 | 2 => {}
             3 => {
                 lzma_bufcpy(
-                    ::core::ptr::addr_of_mut!((*coder).buf) as *mut u8,
-                    ::core::ptr::addr_of_mut!((*coder).buf_pos),
+                    ::core::ptr::addr_of_mut!(coder.buf) as *mut u8,
+                    ::core::ptr::addr_of_mut!(coder.buf_pos),
                     LZMA2_HEADER_UNCOMPRESSED as size_t,
                     out,
                     out_pos,
                     out_size,
                 );
-                if (*coder).buf_pos != LZMA2_HEADER_UNCOMPRESSED as size_t {
+                if coder.buf_pos != LZMA2_HEADER_UNCOMPRESSED as size_t {
                     return LZMA_OK;
                 }
-                (*coder).sequence = SEQ_UNCOMPRESSED_COPY;
+                coder.sequence = SEQ_UNCOMPRESSED_COPY;
             }
             4 | 5 => {}
             _ => return LZMA_PROG_ERROR,
         }
-        if (*coder).sequence == SEQ_UNCOMPRESSED_COPY {
+        if coder.sequence == SEQ_UNCOMPRESSED_COPY {
             mf_read(
                 mf,
                 out,
                 out_pos,
                 out_size,
-                ::core::ptr::addr_of_mut!((*coder).uncompressed_size),
+                ::core::ptr::addr_of_mut!(coder.uncompressed_size),
             );
-            if (*coder).uncompressed_size != 0 {
+            if coder.uncompressed_size != 0 {
                 return LZMA_OK;
             }
-            (*coder).sequence = SEQ_INIT;
+            coder.sequence = SEQ_INIT;
             continue;
         }
-        if (*coder).sequence == SEQ_LZMA_ENCODE {
-            let left: u32 =
-                ((LZMA2_UNCOMPRESSED_MAX as size_t) - (*coder).uncompressed_size) as u32;
+        if coder.sequence == SEQ_LZMA_ENCODE {
+            let left: u32 = ((LZMA2_UNCOMPRESSED_MAX as size_t) - coder.uncompressed_size) as u32;
             let limit: u32 = if left < (*mf).match_len_max {
                 0
             } else {
@@ -179,64 +177,63 @@ unsafe fn lzma2_encode(
             };
             let read_start: u32 = (*mf).read_pos - (*mf).read_ahead;
             let ret: lzma_ret = lzma_lzma_encode(
-                (*coder).lzma as *mut lzma_lzma1_encoder,
+                coder.lzma,
                 mf,
-                (::core::ptr::addr_of_mut!((*coder).buf) as *mut u8)
-                    .offset(LZMA2_HEADER_MAX as isize),
-                ::core::ptr::addr_of_mut!((*coder).compressed_size),
+                (::core::ptr::addr_of_mut!(coder.buf) as *mut u8).offset(LZMA2_HEADER_MAX as isize),
+                ::core::ptr::addr_of_mut!(coder.compressed_size),
                 LZMA2_CHUNK_MAX as size_t,
                 limit,
             );
-            (*coder).uncompressed_size +=
-                ((*mf).read_pos - (*mf).read_ahead - read_start) as size_t;
+            coder.uncompressed_size += ((*mf).read_pos - (*mf).read_ahead - read_start) as size_t;
             if ret != LZMA_STREAM_END {
                 return LZMA_OK;
             }
-            if (*coder).compressed_size >= (*coder).uncompressed_size {
-                (*coder).uncompressed_size += (*mf).read_ahead as size_t;
+            if coder.compressed_size >= coder.uncompressed_size {
+                coder.uncompressed_size += (*mf).read_ahead as size_t;
                 (*mf).read_ahead = 0;
                 lzma2_header_uncompressed(coder);
-                (*coder).need_state_reset = true;
-                (*coder).sequence = SEQ_UNCOMPRESSED_HEADER;
+                coder.need_state_reset = true;
+                coder.sequence = SEQ_UNCOMPRESSED_HEADER;
                 continue;
             }
             lzma2_header_lzma(coder);
-            (*coder).sequence = SEQ_LZMA_COPY;
+            coder.sequence = SEQ_LZMA_COPY;
         }
-        if (*coder).sequence == SEQ_LZMA_COPY {
+        if coder.sequence == SEQ_LZMA_COPY {
             lzma_bufcpy(
-                ::core::ptr::addr_of_mut!((*coder).buf) as *mut u8,
-                ::core::ptr::addr_of_mut!((*coder).buf_pos),
-                (*coder).compressed_size,
+                ::core::ptr::addr_of_mut!(coder.buf) as *mut u8,
+                ::core::ptr::addr_of_mut!(coder.buf_pos),
+                coder.compressed_size,
                 out,
                 out_pos,
                 out_size,
             );
-            if (*coder).buf_pos != (*coder).compressed_size {
+            if coder.buf_pos != coder.compressed_size {
                 return LZMA_OK;
             }
-            (*coder).sequence = SEQ_INIT;
+            coder.sequence = SEQ_INIT;
         }
     }
     LZMA_OK
 }
-unsafe fn lzma2_encoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_lzma2_coder = coder_ptr as *mut lzma_lzma2_coder;
-    crate::alloc::internal_free((*coder).lzma as *mut lzma_lzma1_encoder, allocator);
+pub(crate) unsafe fn lzma2_encoder_end(
+    coder: &mut lzma_lzma2_coder,
+    allocator: *const lzma_allocator,
+) {
+    crate::alloc::internal_free(coder.lzma, allocator);
     crate::alloc::internal_free(coder, allocator);
 }
-unsafe fn lzma2_encoder_options_update(
-    coder_ptr: *mut c_void,
+pub(crate) unsafe fn lzma2_encoder_options_update(
+    coder: &mut lzma_lzma2_coder,
     filter: *const lzma_filter,
 ) -> lzma_ret {
-    let coder: *mut lzma_lzma2_coder = coder_ptr as *mut lzma_lzma2_coder;
-    if (*filter).options.is_null() || (*coder).sequence != SEQ_INIT {
+    if (*filter).options.is_null() || coder.sequence != SEQ_INIT {
         return LZMA_PROG_ERROR;
     }
     let opt: *const lzma_options_lzma = (*filter).options as *const lzma_options_lzma;
-    if (*coder).opt_cur.lc != (*opt).lc
-        || (*coder).opt_cur.lp != (*opt).lp
-        || (*coder).opt_cur.pb != (*opt).pb
+    if coder.opt_cur.lc != (*opt).lc
+        || coder.opt_cur.lp != (*opt).lp
+        || coder.opt_cur.pb != (*opt).pb
     {
         if (*opt).lc > LZMA_LCLP_MAX
             || (*opt).lp > LZMA_LCLP_MAX
@@ -245,11 +242,11 @@ unsafe fn lzma2_encoder_options_update(
         {
             return LZMA_OPTIONS_ERROR;
         }
-        (*coder).opt_cur.lc = (*opt).lc;
-        (*coder).opt_cur.lp = (*opt).lp;
-        (*coder).opt_cur.pb = (*opt).pb;
-        (*coder).need_properties = true;
-        (*coder).need_state_reset = true;
+        coder.opt_cur.lc = (*opt).lc;
+        coder.opt_cur.lp = (*opt).lp;
+        coder.opt_cur.pb = (*opt).pb;
+        coder.need_properties = true;
+        coder.need_state_reset = true;
     }
     LZMA_OK
 }
@@ -263,18 +260,16 @@ unsafe fn lzma2_encoder_init(
     if options.is_null() {
         return LZMA_PROG_ERROR;
     }
-    let mut coder: *mut lzma_lzma2_coder = (*lz).coder as *mut lzma_lzma2_coder;
+    let mut coder: *mut lzma_lzma2_coder = match *lz {
+        lzma_lz_encoder::Lzma2(coder) => coder,
+        _ => core::ptr::null_mut(),
+    };
     if coder.is_null() {
         coder = crate::alloc::internal_alloc_object::<lzma_lzma2_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*lz).coder = coder as *mut c_void;
-        (*lz).code = lzma2_encode as lzma_lz_encoder_code_function;
-        (*lz).end = Some(lzma2_encoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
-        (*lz).options_update = Some(
-            lzma2_encoder_options_update as unsafe fn(*mut c_void, *const lzma_filter) -> lzma_ret,
-        );
+        *lz = lzma_lz_encoder::Lzma2(coder);
         (*coder).lzma = core::ptr::null_mut();
     }
     (*coder).opt_cur = *(options as *const lzma_options_lzma);
@@ -284,7 +279,7 @@ unsafe fn lzma2_encoder_init(
     (*coder).need_dictionary_reset =
         (*coder).opt_cur.preset_dict.is_null() || (*coder).opt_cur.preset_dict_size == 0;
     let ret_: lzma_ret = lzma_lzma_encoder_create(
-        ::core::ptr::addr_of_mut!((*coder).lzma),
+        &mut (*coder).lzma,
         allocator,
         0x21,
         ::core::ptr::addr_of_mut!((*coder).opt_cur),

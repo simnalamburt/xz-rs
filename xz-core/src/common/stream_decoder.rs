@@ -40,7 +40,7 @@ unsafe fn stream_decoder_reset(
     LZMA_OK
 }
 unsafe fn stream_decode(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_stream_coder,
     allocator: *const lzma_allocator,
     input: *const u8,
     in_pos: *mut size_t,
@@ -50,45 +50,44 @@ unsafe fn stream_decode(
     out_size: size_t,
     action: lzma_action,
 ) -> lzma_ret {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
     loop {
-        match (*coder).sequence {
+        match coder.sequence {
             SEQ_STREAM_HEADER => {
                 lzma_bufcpy(
                     input,
                     in_pos,
                     in_size,
-                    ::core::ptr::addr_of_mut!((*coder).buffer) as *mut u8,
-                    ::core::ptr::addr_of_mut!((*coder).pos),
+                    ::core::ptr::addr_of_mut!(coder.buffer) as *mut u8,
+                    ::core::ptr::addr_of_mut!(coder.pos),
                     LZMA_STREAM_HEADER_SIZE as size_t,
                 );
-                if (*coder).pos < LZMA_STREAM_HEADER_SIZE as size_t {
+                if coder.pos < LZMA_STREAM_HEADER_SIZE as size_t {
                     return LZMA_OK;
                 }
-                (*coder).pos = 0;
+                coder.pos = 0;
                 let ret: lzma_ret = lzma_stream_header_decode(
-                    &mut (*coder).stream_flags,
-                    (*coder).buffer.subarray::<0, STREAM_HEADER_SIZE>(),
+                    &mut coder.stream_flags,
+                    coder.buffer.subarray::<0, STREAM_HEADER_SIZE>(),
                 );
                 if ret != LZMA_OK {
-                    return if ret == LZMA_FORMAT_ERROR && !(*coder).first_stream {
+                    return if ret == LZMA_FORMAT_ERROR && !coder.first_stream {
                         LZMA_DATA_ERROR
                     } else {
                         ret
                     };
                 }
-                (*coder).first_stream = false;
-                (*coder).block_options.check = (*coder).stream_flags.check;
-                (*coder).sequence = SEQ_BLOCK_HEADER;
-                if (*coder).tell_no_check && (*coder).stream_flags.check == LZMA_CHECK_NONE {
+                coder.first_stream = false;
+                coder.block_options.check = coder.stream_flags.check;
+                coder.sequence = SEQ_BLOCK_HEADER;
+                if coder.tell_no_check && coder.stream_flags.check == LZMA_CHECK_NONE {
                     return LZMA_NO_CHECK;
                 }
-                if (*coder).tell_unsupported_check
-                    && lzma_check_is_supported((*coder).stream_flags.check) == 0
+                if coder.tell_unsupported_check
+                    && lzma_check_is_supported(coder.stream_flags.check) == 0
                 {
                     return LZMA_UNSUPPORTED_CHECK;
                 }
-                if (*coder).tell_any_check {
+                if coder.tell_any_check {
                     return LZMA_GET_CHECK;
                 }
                 continue;
@@ -97,112 +96,99 @@ unsafe fn stream_decode(
                 if *in_pos >= in_size {
                     return LZMA_OK;
                 }
-                if (*coder).pos == 0 {
+                if coder.pos == 0 {
                     if *input.add(*in_pos) == INDEX_INDICATOR {
-                        (*coder).sequence = SEQ_INDEX;
+                        coder.sequence = SEQ_INDEX;
                         continue;
                     }
-                    (*coder).block_options.header_size = ((*input.add(*in_pos) as u32) + 1) * 4;
+                    coder.block_options.header_size = ((*input.add(*in_pos) as u32) + 1) * 4;
                 }
 
                 lzma_bufcpy(
                     input,
                     in_pos,
                     in_size,
-                    ::core::ptr::addr_of_mut!((*coder).buffer) as *mut u8,
-                    ::core::ptr::addr_of_mut!((*coder).pos),
-                    (*coder).block_options.header_size as size_t,
+                    ::core::ptr::addr_of_mut!(coder.buffer) as *mut u8,
+                    ::core::ptr::addr_of_mut!(coder.pos),
+                    coder.block_options.header_size as size_t,
                 );
-                if (*coder).pos < (*coder).block_options.header_size as size_t {
+                if coder.pos < coder.block_options.header_size as size_t {
                     return LZMA_OK;
                 }
 
-                (*coder).pos = 0;
-                (*coder).sequence = SEQ_BLOCK_INIT;
+                coder.pos = 0;
+                coder.sequence = SEQ_BLOCK_INIT;
                 continue;
             }
             SEQ_BLOCK_INIT => {
-                (*coder).block_options.version = 1;
+                coder.block_options.version = 1;
                 let mut filters = MaybeUninit::<[lzma_filter; 5]>::uninit();
                 let filters_ptr = filters.as_mut_ptr() as *mut lzma_filter;
-                (*coder).block_options.filters = filters_ptr;
-                let ret: lzma_ret = lzma_block_header_decode(
-                    &mut (*coder).block_options,
-                    allocator,
-                    &(*coder).buffer,
-                );
+                coder.block_options.filters = filters_ptr;
+                let ret: lzma_ret =
+                    lzma_block_header_decode(&mut coder.block_options, allocator, &coder.buffer);
                 if ret != LZMA_OK {
                     lzma_filters_free(filters_ptr, allocator);
-                    (*coder).block_options.filters = core::ptr::null_mut();
+                    coder.block_options.filters = core::ptr::null_mut();
                     return ret;
                 }
 
-                (*coder).block_options.ignore_check = (*coder).ignore_check as lzma_bool;
+                coder.block_options.ignore_check = coder.ignore_check as lzma_bool;
 
                 let memusage: u64 = lzma_raw_decoder_memusage(filters_ptr) as u64;
                 let ret = if memusage == UINT64_MAX {
                     LZMA_OPTIONS_ERROR
                 } else {
-                    (*coder).memusage = memusage;
-                    if memusage > (*coder).memlimit {
+                    coder.memusage = memusage;
+                    if memusage > coder.memlimit {
                         LZMA_MEMLIMIT_ERROR
                     } else {
                         lzma_block_decoder_init(
-                            ::core::ptr::addr_of_mut!((*coder).block_decoder),
+                            ::core::ptr::addr_of_mut!(coder.block_decoder),
                             allocator,
-                            ::core::ptr::addr_of_mut!((*coder).block_options),
+                            &mut coder.block_options,
                         )
                     }
                 };
 
                 lzma_filters_free(filters_ptr, allocator);
-                (*coder).block_options.filters = core::ptr::null_mut();
+                coder.block_options.filters = core::ptr::null_mut();
                 if ret != LZMA_OK {
                     return ret;
                 }
 
-                (*coder).sequence = SEQ_BLOCK_RUN;
+                coder.sequence = SEQ_BLOCK_RUN;
                 continue;
             }
             SEQ_BLOCK_RUN => {
-                debug_assert!((*coder).block_decoder.code.is_some());
-                let code = (*coder).block_decoder.code.unwrap_unchecked();
-                let ret: lzma_ret = code(
-                    (*coder).block_decoder.coder,
-                    allocator,
-                    input,
-                    in_pos,
-                    in_size,
-                    out,
-                    out_pos,
-                    out_size,
-                    action,
+                let ret: lzma_ret = coder.block_decoder.code(
+                    allocator, input, in_pos, in_size, out, out_pos, out_size, action,
                 );
                 if ret != LZMA_STREAM_END {
                     return ret;
                 }
 
                 let ret: lzma_ret = lzma_index_hash_append(
-                    (*coder).index_hash,
-                    lzma_block_unpadded_size(::core::ptr::addr_of_mut!((*coder).block_options)),
-                    (*coder).block_options.uncompressed_size,
+                    &mut *coder.index_hash,
+                    lzma_block_unpadded_size(&coder.block_options),
+                    coder.block_options.uncompressed_size,
                 );
                 if ret != LZMA_OK {
                     return ret;
                 }
 
-                (*coder).sequence = SEQ_BLOCK_HEADER;
+                coder.sequence = SEQ_BLOCK_HEADER;
             }
             SEQ_INDEX => {
                 if *in_pos >= in_size {
                     return LZMA_OK;
                 }
                 let ret: lzma_ret =
-                    lzma_index_hash_decode((*coder).index_hash, input, in_pos, in_size);
+                    lzma_index_hash_decode(&mut *coder.index_hash, input, in_pos, in_size);
                 if ret != LZMA_STREAM_END {
                     return ret;
                 }
-                (*coder).sequence = SEQ_STREAM_FOOTER;
+                coder.sequence = SEQ_STREAM_FOOTER;
                 continue;
             }
             SEQ_STREAM_FOOTER => {
@@ -210,19 +196,19 @@ unsafe fn stream_decode(
                     input,
                     in_pos,
                     in_size,
-                    ::core::ptr::addr_of_mut!((*coder).buffer) as *mut u8,
-                    ::core::ptr::addr_of_mut!((*coder).pos),
+                    ::core::ptr::addr_of_mut!(coder.buffer) as *mut u8,
+                    ::core::ptr::addr_of_mut!(coder.pos),
                     LZMA_STREAM_HEADER_SIZE as size_t,
                 );
-                if (*coder).pos < LZMA_STREAM_HEADER_SIZE as size_t {
+                if coder.pos < LZMA_STREAM_HEADER_SIZE as size_t {
                     return LZMA_OK;
                 }
 
-                (*coder).pos = 0;
+                coder.pos = 0;
                 let mut footer_flags = MaybeUninit::<lzma_stream_flags>::zeroed();
                 let ret: lzma_ret = lzma_stream_footer_decode(
                     footer_flags.assume_init_mut(),
-                    (*coder).buffer.subarray::<0, STREAM_HEADER_SIZE>(),
+                    coder.buffer.subarray::<0, STREAM_HEADER_SIZE>(),
                 );
                 if ret != LZMA_OK {
                     return if ret == LZMA_FORMAT_ERROR {
@@ -232,18 +218,17 @@ unsafe fn stream_decode(
                     };
                 }
                 let footer_flags = footer_flags.assume_init();
-                if lzma_index_hash_size(c_ref((*coder).index_hash)) != footer_flags.backward_size {
+                if lzma_index_hash_size(c_ref(coder.index_hash)) != footer_flags.backward_size {
                     return LZMA_DATA_ERROR;
                 }
-                let ret: lzma_ret =
-                    lzma_stream_flags_compare(&(*coder).stream_flags, &footer_flags);
+                let ret: lzma_ret = lzma_stream_flags_compare(&coder.stream_flags, &footer_flags);
                 if ret != LZMA_OK {
                     return ret;
                 }
-                if !(*coder).concatenated {
+                if !coder.concatenated {
                     return LZMA_STREAM_END;
                 }
-                (*coder).sequence = SEQ_STREAM_PADDING;
+                coder.sequence = SEQ_STREAM_PADDING;
                 continue;
             }
             SEQ_STREAM_PADDING => {
@@ -252,7 +237,7 @@ unsafe fn stream_decode(
                         if action != LZMA_FINISH {
                             return LZMA_OK;
                         }
-                        return if (*coder).pos == 0 {
+                        return if coder.pos == 0 {
                             LZMA_STREAM_END
                         } else {
                             LZMA_DATA_ERROR
@@ -262,10 +247,10 @@ unsafe fn stream_decode(
                         break;
                     }
                     *in_pos += 1;
-                    (*coder).pos = ((*coder).pos + 1) & 3;
+                    coder.pos = (coder.pos + 1) & 3;
                 }
 
-                if (*coder).pos != 0 {
+                if coder.pos != 0 {
                     *in_pos += 1;
                     return LZMA_DATA_ERROR;
                 }
@@ -279,30 +264,29 @@ unsafe fn stream_decode(
         }
     }
 }
-unsafe fn stream_decoder_end(coder_ptr: *mut c_void, allocator: *const lzma_allocator) {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
-    lzma_next_end(::core::ptr::addr_of_mut!((*coder).block_decoder), allocator);
-    lzma_index_hash_end((*coder).index_hash, allocator);
+unsafe fn stream_decoder_end(coder: &mut lzma_stream_coder, allocator: *const lzma_allocator) {
+    lzma_next_end(::core::ptr::addr_of_mut!(coder.block_decoder), allocator);
+    if !coder.index_hash.is_null() {
+        lzma_index_hash_end(&mut *coder.index_hash, allocator);
+    }
     crate::alloc::internal_free(coder, allocator);
 }
-unsafe fn stream_decoder_get_check(coder_ptr: *const c_void) -> lzma_check {
-    let coder: *const lzma_stream_coder = coder_ptr as *const lzma_stream_coder;
-    (*coder).stream_flags.check
+unsafe fn stream_decoder_get_check(coder: &lzma_stream_coder) -> lzma_check {
+    coder.stream_flags.check
 }
 unsafe fn stream_decoder_memconfig(
-    coder_ptr: *mut c_void,
+    coder: &mut lzma_stream_coder,
     memusage: *mut u64,
     old_memlimit: *mut u64,
     new_memlimit: u64,
 ) -> lzma_ret {
-    let coder: *mut lzma_stream_coder = coder_ptr as *mut lzma_stream_coder;
-    *memusage = (*coder).memusage;
-    *old_memlimit = (*coder).memlimit;
+    *memusage = coder.memusage;
+    *old_memlimit = coder.memlimit;
     if new_memlimit != 0 {
-        if new_memlimit < (*coder).memusage {
+        if new_memlimit < coder.memusage {
             return LZMA_MEMLIMIT_ERROR;
         }
-        (*coder).memlimit = new_memlimit;
+        coder.memlimit = new_memlimit;
     }
     LZMA_OK
 }
@@ -332,46 +316,14 @@ pub(crate) unsafe fn lzma_stream_decoder_init(
     if flags & !(LZMA_SUPPORTED_FLAGS as u32) != 0 {
         return LZMA_OPTIONS_ERROR;
     }
-    let mut coder: *mut lzma_stream_coder = (*next).coder as *mut lzma_stream_coder;
+    let mut coder: *mut lzma_stream_coder = (*next).coder_as::<lzma_stream_coder>();
     if coder.is_null() {
         coder = crate::common::common::lzma_alloc_object::<lzma_stream_coder>(allocator);
         if coder.is_null() {
             return LZMA_MEM_ERROR;
         }
-        (*next).coder = coder as *mut c_void;
-        (*next).code = Some(
-            stream_decode
-                as unsafe fn(
-                    *mut c_void,
-                    *const lzma_allocator,
-                    *const u8,
-                    *mut size_t,
-                    size_t,
-                    *mut u8,
-                    *mut size_t,
-                    size_t,
-                    lzma_action,
-                ) -> lzma_ret,
-        );
-        (*next).end =
-            Some(stream_decoder_end as unsafe fn(*mut c_void, *const lzma_allocator) -> ());
-        (*next).get_check =
-            Some(stream_decoder_get_check as unsafe fn(*const c_void) -> lzma_check);
-        (*next).memconfig = Some(
-            stream_decoder_memconfig as unsafe fn(*mut c_void, *mut u64, *mut u64, u64) -> lzma_ret,
-        );
-        (*coder).block_decoder = lzma_next_coder_s {
-            coder: core::ptr::null_mut(),
-            id: LZMA_VLI_UNKNOWN,
-            init: 0,
-            code: None,
-            end: None,
-            get_progress: None,
-            get_check: None,
-            memconfig: None,
-            update: None,
-            set_out_limit: None,
-        };
+        (*next).set_coder(coder);
+        (*coder).block_decoder = LZMA_NEXT_CODER_INIT;
         (*coder).index_hash = core::ptr::null_mut();
     }
     (*coder).memlimit = if 1 > memlimit { 1 } else { memlimit };
@@ -383,6 +335,42 @@ pub(crate) unsafe fn lzma_stream_decoder_init(
     (*coder).concatenated = flags & LZMA_CONCATENATED as u32 != 0;
     (*coder).first_stream = true;
     stream_decoder_reset(coder, allocator)
+}
+impl NextCoder for lzma_stream_coder {
+    unsafe fn code(
+        &mut self,
+        allocator: *const lzma_allocator,
+        input: *const u8,
+        in_pos: *mut size_t,
+        in_size: size_t,
+        out: *mut u8,
+        out_pos: *mut size_t,
+        out_size: size_t,
+        action: lzma_action,
+    ) -> lzma_ret {
+        stream_decode(
+            self, allocator, input, in_pos, in_size, out, out_pos, out_size, action,
+        )
+    }
+    unsafe fn end(&mut self, allocator: *const lzma_allocator) {
+        stream_decoder_end(self, allocator)
+    }
+    unsafe fn get_check(&self) -> Option<lzma_check> {
+        Some(stream_decoder_get_check(self))
+    }
+    unsafe fn memconfig(
+        &mut self,
+        memusage: *mut u64,
+        old_memlimit: *mut u64,
+        new_memlimit: u64,
+    ) -> Option<lzma_ret> {
+        Some(stream_decoder_memconfig(
+            self,
+            memusage,
+            old_memlimit,
+            new_memlimit,
+        ))
+    }
 }
 pub unsafe fn lzma_stream_decoder(strm: &mut lzma_stream, memlimit: u64, flags: u32) -> lzma_ret {
     let ret_: lzma_ret = lzma_strm_init(strm);

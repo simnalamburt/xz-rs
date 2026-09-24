@@ -18,28 +18,14 @@ pub unsafe fn lzma_raw_buffer_decode(
     {
         return LZMA_PROG_ERROR;
     }
-    let mut next: lzma_next_coder = lzma_next_coder_s {
-        coder: core::ptr::null_mut(),
-        id: LZMA_VLI_UNKNOWN,
-        init: 0,
-        code: None,
-        end: None,
-        get_progress: None,
-        get_check: None,
-        memconfig: None,
-        update: None,
-        set_out_limit: None,
-    };
+    let mut next: lzma_next_coder = LZMA_NEXT_CODER_INIT;
     let ret: lzma_ret = lzma_raw_decoder_init(::core::ptr::addr_of_mut!(next), allocator, filters);
     if ret != LZMA_OK {
         return ret;
     }
-    debug_assert!(next.code.is_some());
-    let code = next.code.unwrap_unchecked();
     let in_start: size_t = *in_pos;
     let out_start: size_t = *out_pos;
-    let mut ret: lzma_ret = code(
-        next.coder,
+    let mut ret: lzma_ret = next.code(
         allocator,
         input,
         in_pos,
@@ -60,8 +46,7 @@ pub unsafe fn lzma_raw_buffer_decode(
             } else {
                 let mut tmp: [u8; 1] = [0; 1];
                 let mut tmp_pos: size_t = 0;
-                code(
-                    next.coder,
+                next.code(
                     allocator,
                     input,
                     in_pos,
